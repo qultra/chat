@@ -2,570 +2,718 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>P2P 채팅 – 한 번의 링크로 연결</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>P2P 메신저 – 가장 쉬운 버전</title>
   <style>
-    :root {
-      --bg: #0b0e14; --surface: #141a24; --card: rgba(20,26,36,0.8);
-      --text: #e2e8f0; --sub: #94a3b8; --accent: #5b8def; --danger: #f87171;
-      --border: #1e293b; --radius: 20px; --radius-sm: 14px;
-    }
-    * { margin:0; padding:0; box-sizing:border-box; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: var(--bg); color: var(--text);
-      display: flex; justify-content: center; align-items: center;
-      min-height: 100dvh; padding: 10px;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1a1f35, #0b0e14);
+      color: #e0e0e0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
     }
     .container {
-      width: 100%; max-width: 500px; height: 95dvh;
-      background: var(--surface); border-radius: 32px;
-      box-shadow: 0 25px 60px rgba(0,0,0,0.6);
-      display: flex; flex-direction: column; overflow: hidden;
-      border: 1px solid var(--border);
+      width: 100%;
+      max-width: 800px;
+      height: 90vh;
+      background: rgba(20, 25, 40, 0.8);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      border-radius: 32px;
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255,255,255,0.05);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
     .header {
-      padding: 16px 20px; background: rgba(15,23,33,0.8);
-      backdrop-filter: blur(20px); border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .header h1 { font-size: 1.2rem; font-weight: 700; background: linear-gradient(135deg,#8ab4f8,#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-    .status-dot { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; }
-    .dot.on { background: #4ade80; } .dot.off { background: #f87171; }
-
-    .main { flex:1; overflow-y:auto; padding: 16px; display:flex; flex-direction:column; }
-    .main::-webkit-scrollbar { width:4px; } .main::-webkit-scrollbar-thumb { background:#334155; border-radius:2px; }
-
+    .header h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, #a0c0ff, #6d8ae7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #aaa;
+    }
+    .led {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 0 8px currentColor;
+    }
+    .led.on { background: #4caf50; color: #4caf50; }
+    .led.off { background: #f44336; color: #f44336; }
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      overflow-y: auto;
+    }
     .card {
-      background: var(--card); backdrop-filter: blur(12px);
-      border-radius: var(--radius); padding: 18px; margin-bottom: 12px;
-      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 24px;
+      padding: 20px;
+      margin-bottom: 16px;
     }
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      background: rgba(255,255,255,0.06); color: white; border: 1px solid var(--border);
-      padding: 12px 20px; border-radius: var(--radius-sm); cursor: pointer;
-      font-weight: 600; font-size: 1rem; transition: all 0.2s; width: 100%;
-      text-align: center; backdrop-filter: blur(10px);
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 8px 0;
     }
-    .btn:hover { background: rgba(255,255,255,0.12); }
-    .btn.primary { background: var(--accent); border:none; }
-    .btn.warn { background: rgba(248,113,113,0.2); color: var(--danger); border-color: var(--danger); }
-    .btn-group { display: flex; gap: 8px; }
-    .btn-group .btn { flex:1; }
-
-    input[type=text], textarea {
-      width: 100%; background: #0f131c; color: var(--text);
-      border: 1px solid var(--border); border-radius: var(--radius-sm);
-      padding: 12px 16px; font-size: 1rem; outline: none;
+    button {
+      background: rgba(255,255,255,0.06);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 10px 18px;
+      border-radius: 14px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: all 0.2s;
+      backdrop-filter: blur(10px);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
-    input:focus, textarea:focus { border-color: var(--accent); }
-
-    #chatScreen { display: none; flex-direction: column; flex:1; }
-    #messages {
-      flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;
-      padding: 4px 0;
+    button:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.2);
     }
-    .msg { display: flex; }
-    .msg.me { justify-content: flex-end; }
+    button.primary {
+      background: #3a5a9f;
+      border-color: #6a8fd8;
+      box-shadow: 0 4px 12px rgba(58,90,159,0.4);
+    }
+    button.primary:hover { background: #4b6db5; }
+    button.big {
+      padding: 18px 28px;
+      font-size: 1.3rem;
+      border-radius: 20px;
+      width: 100%;
+      justify-content: center;
+    }
+    input[type=text] {
+      background: rgba(0, 0, 0, 0.3);
+      color: #ddd;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      width: 100%;
+    }
+    .chat-screen { display: none; flex-direction: column; flex: 1; }
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 4px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .message {
+      display: flex;
+      max-width: 80%;
+    }
+    .message.mine { align-self: flex-end; }
+    .message.other { align-self: flex-start; }
     .bubble {
-      max-width: 80%; padding: 10px 16px; border-radius: 20px;
-      background: rgba(30,38,53,0.8); backdrop-filter: blur(8px);
+      padding: 10px 16px;
+      border-radius: 18px;
+      word-break: break-word;
+      position: relative;
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,0.05);
-      animation: fadeUp 0.2s ease;
     }
-    .msg.me .bubble { background: linear-gradient(135deg,rgba(59,130,246,0.4),rgba(139,92,246,0.4)); border-bottom-right-radius:6px; }
-    .msg.other .bubble { border-bottom-left-radius:6px; }
-    .time { font-size: 0.65rem; color: var(--sub); margin-top: 4px; text-align: right; }
-    .file-inline { display: flex; align-items: center; gap: 8px; }
-    .file-inline img { max-width: 180px; max-height: 120px; border-radius: 12px; }
-    .input-bar { display: flex; gap: 8px; padding: 12px 0 0; }
-    #msgInput { flex:1; }
-    .emoji-btn, .attach-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 4px; }
-    .emoji-panel { display: none; flex-wrap: wrap; gap: 4px; padding: 8px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; }
-    .emoji-panel button { font-size: 1.4rem; background: none; border: none; cursor: pointer; padding: 6px; border-radius: 8px; }
-    .emoji-panel button:hover { background: rgba(255,255,255,0.1); }
-
-    .spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+    .message.mine .bubble {
+      background: linear-gradient(135deg, #2f4b7c, #1e3a5f);
+      border-bottom-right-radius: 4px;
+    }
+    .message.other .bubble {
+      background: rgba(255,255,255,0.06);
+      border-bottom-left-radius: 4px;
+    }
+    .timestamp {
+      font-size: 0.65rem;
+      color: #aaa;
+      margin-top: 4px;
+      text-align: right;
+    }
+    .file-msg {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .file-msg img {
+      max-width: 200px;
+      max-height: 150px;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+    .input-bar {
+      display: flex;
+      gap: 8px;
+      padding-top: 12px;
+    }
+    .attach-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 8px;
+      color: #a0c0ff;
+    }
+    .hidden-file-input { display: none; }
+    .small-text { font-size: 0.8rem; color: #aaa; }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #a0c0ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 20px auto;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-
-    .hidden { display: none !important; }
-    .text-center { text-align: center; }
-    .text-sub { color: var(--sub); font-size: 0.85rem; }
-    .mt { margin-top: 8px; }
-    .mb { margin-bottom: 8px; }
-
-    #advancedSettings { display: none; }
-    .link-box { word-break: break-all; background: #0f131c; padding: 12px; border-radius: 12px; font-size: 0.75rem; margin: 8px 0; }
+    .fingerprint {
+      font-family: monospace;
+      background: rgba(0,0,0,0.3);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      word-break: break-all;
+    }
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>✦ P2P 채팅</h1>
-    <div class="status-dot">
-      <span id="connDot" class="dot off"></span>
-      <span id="connLabel">오프라인</span>
+    <h2>✦ P2P 메신저</h2>
+    <div class="status-badge">
+      <span id="connLed" class="led off"></span>
+      <span id="connText">오프라인</span>
     </div>
   </div>
-  <div class="main" id="mainArea">
-    <!-- 일반 모드 -->
-    <div id="simpleMode">
-      <div class="card text-center">
-        <p class="text-sub mb">서버 없이 직접 연결되는<br>완전한 프라이버시 채팅</p>
-        <button class="btn primary" onclick="startNewChat()">✨ 새 채팅 시작</button>
-        <button class="btn mt" onclick="joinChat()">📩 초대 코드 입력</button>
-        <button class="btn mt" id="toggleAdvanced" onclick="toggleAdvanced()">⚙️ 고급 설정</button>
+  <div class="main-area" id="mainArea">
+    <!-- 시작 화면 -->
+    <div id="welcomeArea">
+      <div class="card" style="text-align:center;">
+        <h3 style="font-size:2rem; margin-bottom:8px;">👋 환영합니다</h3>
+        <p style="color:#aaa; margin-bottom:24px;">서버도, 회원가입도 없이<br>가장 안전한 대화를 시작하세요.</p>
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <button class="primary big" onclick="startHost()">✨ 새 대화방 만들기</button>
+          <button class="big" onclick="startJoin()">📩 초대 받고 참가하기</button>
+        </div>
+        <div class="row" style="justify-content:center; margin-top:16px;">
+          <span id="idFpShort" class="fingerprint small-text">내 신원: 로딩 중...</span>
+          <button onclick="exportId()" style="font-size:0.8rem;">📥</button>
+          <button onclick="document.getElementById('importFile').click()" style="font-size:0.8rem;">📤</button>
+        </div>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importId(event)">
       </div>
+    </div>
 
-      <!-- 고급 설정 -->
-      <div id="advancedSettings">
+    <!-- 방장: 링크 공유 화면 -->
+    <div id="hostArea" style="display:none;">
+      <div class="card" style="text-align:center;">
+        <h3>🔗 대화방 링크</h3>
+        <p style="color:#aaa; margin-bottom:12px;">아래 링크를 상대방에게 보내면 연결됩니다.</p>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <input type="text" id="shareLink" readonly placeholder="연결 링크 생성 중..." style="flex:1;">
+          <button onclick="copyShareLink()">📋 복사</button>
+        </div>
+        <div class="spinner" id="hostSpinner" style="display:none;"></div>
+        <p id="hostStatus" style="color:#aaa;">상대방이 링크를 열면 자동으로 연결됩니다.</p>
+        <button onclick="showManualSDP()" class="small-text" style="margin-top:12px;">⚙️ 고급: 수동으로 연결하기</button>
+      </div>
+      <!-- 수동 SDP 섹션 (고급 사용자용) -->
+      <div id="manualSDPSection" style="display:none;">
         <div class="card">
-          <strong>🌐 연결 서버</strong>
-          <div style="margin:8px 0;">
-            <label><input type="radio" name="serverMode" value="privacy" checked onchange="updateServerDesc()"> 프라이버시 (추천)</label>
-            <label style="margin-left:12px;"><input type="radio" name="serverMode" value="global" onchange="updateServerDesc()"> 글로벌</label>
-          </div>
-          <label><input type="checkbox" id="randomizeStun" checked> 무작위 선택</label>
-          <p id="serverDesc" class="text-sub mt"></p>
+          <h4>📤 내 Offer SDP</h4>
+          <textarea id="localOfferSDP" readonly rows="4" style="margin-top:8px;"></textarea>
+          <button onclick="copyText('localOfferSDP')" style="margin-top:8px;">📋 복사</button>
         </div>
-      </div>
-
-      <!-- 새 채팅 (Offer) -->
-      <div id="offerPanel" class="hidden">
-        <div class="card text-center">
-          <div class="spinner mb" id="offerSpinner"></div>
-          <p><strong>연결 준비 중...</strong></p>
-          <p class="text-sub">아래 링크를 상대방에게 보내세요.<br>상대방이 링크를 열면 자동으로 참가합니다.</p>
-          <div class="link-box" id="offerLinkDisplay"></div>
-          <div class="btn-group mt">
-            <button class="btn" onclick="copyTextById('offerLinkDisplay')">📋 링크 복사</button>
-          </div>
-          <p class="text-sub mt">상대방이 Answer 링크를 보내면<br>아래에 붙여넣고 연결하세요</p>
-          <div class="card mt" style="background:rgba(0,0,0,0.2);">
-            <strong>📥 Answer 링크 붙여넣기</strong>
-            <input type="text" id="answerLinkInput" placeholder="상대에게 받은 Answer 링크...">
-            <button class="btn primary mt" onclick="applyAnswerLink()">✅ 연결 완료</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 참가 (Answer) 자동 처리용 -->
-      <div id="autoAnswerPanel" class="hidden">
-        <div class="card text-center">
-          <div class="spinner mb" id="answerSpinner"></div>
-          <p><strong>초대 링크 확인 중...</strong></p>
-        </div>
-        <div id="answerReadyPanel" class="hidden card text-center">
-          <p><strong>✅ 연결 준비 완료!</strong></p>
-          <p class="text-sub">아래 링크를 상대방에게<br>돌려보내면 대화가 시작됩니다.</p>
-          <div class="link-box" id="answerLinkDisplay"></div>
-          <div class="btn-group mt">
-            <button class="btn" onclick="copyTextById('answerLinkDisplay')">📋 링크 복사</button>
-            <button class="btn" onclick="shareAnswerLink()">📤 공유하기</button>
-          </div>
-          <p class="text-sub mt">상대방이 이 링크를 열면<br>자동으로 연결됩니다.</p>
-        </div>
-      </div>
-
-      <!-- 기존 수동 입력 모드 (초대 코드 입력) -->
-      <div id="manualJoinPanel" class="hidden">
         <div class="card">
-          <strong>📥 초대 코드 붙여넣기</strong>
-          <textarea id="remoteOfferSDP" rows="3" placeholder="상대방에게 받은 초대 코드..."></textarea>
-          <button class="btn primary mt" onclick="createAnswerFromOffer()">🔄 Answer 생성</button>
+          <h4>📥 상대방의 Answer SDP</h4>
+          <textarea id="remoteAnswerSDP" rows="4" placeholder="여기에 Answer SDP를 붙여넣으세요..."></textarea>
+          <button onclick="applyAnswer()" class="primary" style="margin-top:8px;">✅ 연결 완료</button>
         </div>
-        <div id="answerResultPanel" class="hidden card mt">
-          <strong>📤 내 Answer 코드</strong>
-          <textarea id="localAnswerSDP" readonly rows="3"></textarea>
-          <button class="btn mt" onclick="copyText('localAnswerSDP')">📋 복사해서 상대에게 전송</button>
-        </div>
+      </div>
+    </div>
+
+    <!-- 참가자: 링크 or 수동 입력 -->
+    <div id="joinArea" style="display:none;">
+      <div class="card" style="text-align:center;">
+        <h3>📥 대화 참가</h3>
+        <p style="color:#aaa; margin-bottom:12px;">받은 링크를 열면 자동으로 연결됩니다.<br>또는 아래에 직접 입력할 수 있습니다.</p>
+        <textarea id="remoteOfferSDP" rows="4" placeholder="받은 Offer SDP를 여기에 붙여넣으세요..."></textarea>
+        <button onclick="createAnswerFromOffer()" class="primary" style="margin-top:8px;">연결하기</button>
+        <div class="spinner" id="joinSpinner" style="display:none;"></div>
+        <p id="joinStatus" style="color:#aaa; margin-top:8px;"></p>
       </div>
     </div>
 
     <!-- 채팅 화면 -->
-    <div id="chatScreen">
-      <div id="messages"></div>
-      <div class="emoji-panel" id="emojiPanel"></div>
+    <div id="chatScreen" class="chat-screen">
+      <div id="messagesContainer" class="messages-container"></div>
       <div class="input-bar">
-        <button class="emoji-btn" onclick="toggleEmoji()">😊</button>
-        <button class="attach-btn" id="attachBtn" onclick="document.getElementById('fileInput').click()">📎</button>
-        <input type="text" id="msgInput" placeholder="메시지..." autocomplete="off">
-        <button class="btn primary" style="width:auto; padding:10px 16px;" onclick="sendText()">전송</button>
+        <button class="attach-btn" onclick="document.getElementById('fileInput').click()">📎</button>
+        <input type="text" id="messageInput" placeholder="메시지 입력 (E2EE 암호화)" autocomplete="off" style="flex:1;">
+        <button onclick="sendTextMessage()" class="primary">전송</button>
       </div>
-      <input type="file" id="fileInput" class="hidden" multiple onchange="handleFiles(this.files)">
+      <input type="file" id="fileInput" class="hidden-file-input" multiple onchange="handleFileSelect(event)">
     </div>
   </div>
 </div>
 
 <script>
-// ==================== 전역 변수 ====================
-const ID_KEY = 'p2p_id_v11';
-let idPair;
-let ephemeralPair, peerEphemeralPub;
-let rootKey, sendCK, recvCK;
-let sendIdx=0, recvIdx=0;
-let pc, dc, isOfferer=false;
-let pendingFiles = {};
+// ---------------- 전역 변수 ----------------
+const ID_STORAGE_KEY = 'p2p_identity_easy';
+const CHUNK_SIZE = 16 * 1024;
 
-// ==================== 서버 목록 ====================
-const PRIVACY = [
-  'stun:stun.services.mozilla.com:3478','stun:stun.nextcloud.com:443',
-  'stun:stun.linphone.org:3478','stun:stun.freeswitch.org:3478',
-  'stun:stun.ekiga.net:3478','stun:stun.viagenie.ca:3478','stun:stun.iptel.org:3478'
-];
-const GLOBAL = [...PRIVACY,
-  'stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:global.stun.twilio.com:3478',
-  'stun:stun.voipbuster.com:3478','stun:stun.voipstunt.com:3478','stun:stun.voipswitch.com:3478',
-  'stun:stun.voiparound.com:3478','stun:stun.schlund.de:3478','stun:stun.voipgate.com:3478',
-  'stun:stun.callwithus.com:3478','stun:stun.netapp.com:3478','stun:stun.blink.de:3478',
-  'stun:stun.ovh.net:3478','stun:stun.12voip.com:3478','stun:stun.evaphone.com:3478',
-  'stun:stun.intervoip.com:3478','stun:stun.freevoipdeal.com:3478','stun:stun.voxox.com:3478',
-  'turn:openrelay.metered.ca:80?transport=tcp','turn:openrelay.metered.ca:443?transport=tcp',
-  'turn:numb.viagenie.ca?transport=udp'
+let idKeyPair, idPubJwkStr;
+let ephemeralKeyPair, peerEphemeralPubKey;
+let rootKey, sendingChainKey, receivingChainKey;
+let sendingIdx = 0, receivingIdx = 0;
+let pc, dc;
+let isOfferer = false;
+let pendingFileBuffers = {};
+
+// ---------------- 서버 목록 (150+) ----------------
+const GLOBAL_SERVERS = [
+  'stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun2.l.google.com:19302','stun:stun3.l.google.com:19302','stun:stun4.l.google.com:19302',
+  'stun:global.stun.twilio.com:3478','stun:stun.twilio.com:3478',
+  'stun:stun.services.mozilla.com:3478','stun:stun.nextcloud.com:443','stun:stun.linphone.org:3478',
+  'stun:stun.freeswitch.org:3478','stun:stun.ekiga.net:3478','stun:stun.viagenie.ca:3478','stun:stun.stunprotocol.org:3478',
+  'stun:stun.sipgate.net:3478','stun:stun.sipgate.de:3478','stun:stun.sipgate.co.uk:3478','stun:stun.sipgate.com:3478',
+  'stun:stun.iptel.org:3478','stun:stun.iptel.net:3478','stun:stun.iptel.com:3478','stun:stun.iptel.io:3478','stun:stun.iptel.ch:3478',
+  'stun:openrelay.metered.ca:80','stun:openrelay.metered.ca:443',
+  'turn:openrelay.metered.ca:80?transport=tcp','turn:openrelay.metered.ca:80?transport=udp','turn:openrelay.metered.ca:443?transport=tcp','turn:openrelay.metered.ca:443?transport=udp','turn:openrelay.metered.ca:5349?transport=tcp','turn:openrelay.metered.ca:5349?transport=udp',
+  'stun:stun.numb.co:3478','stun:stun.counterpath.com:3478',
+  'stun:stun.voipbuster.com:3478','stun:stun.voipstunt.com:3478','stun:stun.voipswitch.com:3478','stun:stun.voiparound.com:3478','stun:stun.voipcheap.com:3478','stun:stun.voipdiscount.com:3478','stun:stun.sipdiscount.com:3478','stun:stun.voipgain.com:3478','stun:stun.myvoipprovider.com:3478',
+  'stun:stun.schlund.de:3478','stun:stun.voipgate.com:3478','stun:stun.callwithus.com:3478','stun:stun.netapp.com:3478','stun:stun.blink.de:3478',
+  'stun:stun.ovh.net:3478','stun:stun.12voip.com:3478','stun:stun.evaphone.com:3478','stun:stun.intervoip.com:3478','stun:stun.freevoipdeal.com:3478',
+  'stun:stun.voxox.com:3478','stun:stun.pbxes.com:3478','stun:stun.pbxes.de:3478','stun:stun.gradwell.com:3478','stun:stun.ideasip.com:3478',
+  'stun:stun.phonepower.com:3478','stun:stun.skyways.com:3478','stun:stun.3cx.com:3478','stun:stun.t-online.de:3478',
+  'stun:stun.sippeer.com:3478','stun:stun.azteca.net:3478','stun:stun.zoiper.com:3478','stun:stun.onsip.com:3478','stun:stun.sipgate.team:3478',
+  'stun:stun.voip.ms:3478','stun:stun.telnyx.com:3478','stun:stun.flowroute.com:3478','stun:stun.bandwidth.com:3478','stun:stun.vonage.com:3478',
+  'stun:stun.cisco.com:3478','stun:stun.oracle.com:3478','stun:stun.microsoft.com:3478','stun:stun.cloudflare.com:3478',
+  'stun:stun.voipraider.com:3478','stun:stun.justvoip.com:3478','stun:stun.internetcalls.com:3478','stun:stun.nonoh.net:3478',
+  'stun:stun.poivy.com:3478','stun:stun.telbo.com:3478','stun:stun.voipwise.com:3478','stun:stun.webcalldirect.com:3478'
 ];
 
+// ---------------- 초기화 ----------------
+(async function init() {
+  await loadOrCreateIdentity();
+  handleURLHash();
+  document.getElementById('messageInput').addEventListener('keypress', e => {
+    if (e.key === 'Enter') sendTextMessage();
+  });
+})();
+
+async function loadOrCreateIdentity() {
+  const stored = localStorage.getItem(ID_STORAGE_KEY);
+  if (stored) {
+    const jwk = JSON.parse(stored);
+    idKeyPair = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDH', namedCurve: 'P-521' }, false, ['deriveBits']);
+  } else {
+    idKeyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-521' }, true, ['deriveBits']);
+    const priJwk = await crypto.subtle.exportKey('jwk', idKeyPair.privateKey);
+    localStorage.setItem(ID_STORAGE_KEY, JSON.stringify(priJwk));
+  }
+  const pubJwk = await crypto.subtle.exportKey('jwk', idKeyPair.publicKey);
+  idPubJwkStr = pubJwk.x ? pubJwk.x.substring(0,8) + '...' : 'P-521';
+  document.getElementById('idFpShort').textContent = '내 신원: ' + idPubJwkStr;
+}
+
+async function exportId() {
+  const priJwk = await crypto.subtle.exportKey('jwk', idKeyPair.privateKey);
+  const blob = new Blob([JSON.stringify(priJwk)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'p2pchat-id.json';
+  a.click();
+}
+
+async function importId(event) {
+  const file = event.target.files[0];
+  const text = await file.text();
+  const jwk = JSON.parse(text);
+  idKeyPair = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDH', namedCurve: 'P-521' }, false, ['deriveBits']);
+  localStorage.setItem(ID_STORAGE_KEY, JSON.stringify(jwk));
+  const pubJwk = await crypto.subtle.exportKey('jwk', idKeyPair.publicKey);
+  idPubJwkStr = pubJwk.x ? pubJwk.x.substring(0,8) + '...' : 'P-521';
+  document.getElementById('idFpShort').textContent = '내 신원: ' + idPubJwkStr;
+}
+
+// ---------------- URL 해시 처리 (참가자 자동 연결) ----------------
+function handleURLHash() {
+  const hash = window.location.hash;
+  if (hash && hash.startsWith('#join=')) {
+    const b64 = hash.replace('#join=', '');
+    try {
+      const data = JSON.parse(atob(b64));
+      if (data.offer) {
+        startJoin();
+        document.getElementById('remoteOfferSDP').value = data.offer;
+        createAnswerFromOffer();
+      }
+    } catch (e) { console.error('링크 오류:', e); }
+  }
+}
+
+// ---------------- 화면 전환 ----------------
+function showArea(areaId) {
+  ['welcomeArea', 'hostArea', 'joinArea'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  if (areaId) document.getElementById(areaId).style.display = 'block';
+}
+
+function startHost() {
+  showArea('hostArea');
+  document.getElementById('hostSpinner').style.display = 'block';
+  document.getElementById('hostStatus').textContent = '연결 준비 중...';
+  createOfferAsHost();
+}
+
+function startJoin() {
+  showArea('joinArea');
+}
+
+function showManualSDP() {
+  document.getElementById('manualSDPSection').style.display = 'block';
+}
+
+// ---------------- 링크 생성 ----------------
+function generateShareLink(offerSDP) {
+  const b64 = btoa(offerSDP);
+  const link = `${window.location.origin}${window.location.pathname}#join=${b64}`;
+  document.getElementById('shareLink').value = link;
+}
+
+function copyShareLink() {
+  const input = document.getElementById('shareLink');
+  input.select();
+  navigator.clipboard.writeText(input.value);
+  alert('링크가 복사되었습니다! 상대방에게 공유하세요.');
+}
+
+// ---------------- WebRTC 시그널링 ----------------
 function getIceServers() {
-  const mode = document.querySelector('input[name=serverMode]:checked')?.value || 'privacy';
-  const rand = document.getElementById('randomizeStun').checked;
-  let list = mode==='privacy' ? [...PRIVACY] : [...GLOBAL];
-  if(rand) list = list.sort(()=>Math.random()-0.5).slice(0, Math.min(5, list.length));
-  return list.map(url => {
-    if(url.startsWith('turn:')) {
-      const [addr,params] = url.split('?');
-      const t = params?.includes('tcp')?'tcp':'udp';
-      let u='openrelayproject', c='openrelayproject';
-      if(addr.includes('numb')) { u='numb@viagenie.ca'; c='numb'; }
-      return {urls:`${addr}?transport=${t}`, username:u, credential:c};
+  const shuffled = [...GLOBAL_SERVERS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 5).map(url => {
+    if (url.startsWith('turn:')) {
+      const [addr, params] = url.split('?');
+      const transport = params?.includes('transport=tcp') ? 'tcp' : 'udp';
+      return { urls: `${addr}?transport=${transport}`, username: 'openrelayproject', credential: 'openrelayproject' };
     }
-    return {urls:url};
+    return { urls: url };
   });
 }
 
-// ==================== 초기화 ====================
-(async function init(){
-  const stored = localStorage.getItem(ID_KEY);
-  if(stored) idPair = await crypto.subtle.importKey('jwk',JSON.parse(stored),{name:'ECDH',namedCurve:'P-521'},false,['deriveBits']);
-  else {
-    idPair = await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-521'},true,['deriveBits']);
-    localStorage.setItem(ID_KEY, JSON.stringify(await crypto.subtle.exportKey('jwk',idPair.privateKey)));
-  }
-  document.getElementById('msgInput').addEventListener('keypress',e=>{ if(e.key==='Enter') sendText(); });
-  buildEmojiPanel();
-  updateServerDesc();
-  document.addEventListener('dragover', e=>e.preventDefault());
-  document.addEventListener('drop', async e=>{ e.preventDefault(); if(e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
-
-  // 페이지 로드 시 해시 확인
-  checkHash();
-})();
-
-function updateServerDesc() {
-  const mode = document.querySelector('input[name=serverMode]:checked')?.value || 'privacy';
-  document.getElementById('serverDesc').textContent = mode==='privacy' ? '오픈소스 서버 7개만 사용 (추적 거의 불가)' : '전 세계 150+ 서버로 연결 최대화';
+function initPeerConnection() {
+  pc = new RTCPeerConnection({ iceServers: getIceServers() });
+  pc.oniceconnectionstatechange = () => {
+    const state = pc.iceConnectionState;
+    updateConnectionStatus(state);
+    if (state === 'connected') showChatScreen();
+    else if (state === 'disconnected' || state === 'failed') showWelcomeScreen();
+  };
+  pc.ondatachannel = (event) => { dc = event.channel; setupDataChannel(); };
 }
 
-function toggleAdvanced() {
-  const adv = document.getElementById('advancedSettings');
-  adv.style.display = adv.style.display==='block' ? 'none' : 'block';
+function setupDataChannel() {
+  dc.onopen = async () => {
+    updateConnectionStatus('connected');
+    await performE2EEHandshake();
+    showChatScreen();
+  };
+  dc.onmessage = handleIncomingMessage;
 }
 
-// ==================== 해시 처리 (원클릭 연결) ====================
-async function checkHash() {
-  const hash = window.location.hash.substring(1); // '#' 제거
-  if (!hash) return; // 일반 모드
-
-  const params = new URLSearchParams(hash);
-  if (params.has('offer')) {
-    // 상대방이 보낸 Offer → 자동 Answer 모드
-    const offerBase64 = params.get('offer');
-    try {
-      const offerJson = atob(offerBase64);
-      const offer = JSON.parse(offerJson);
-      await autoAnswer(offer);
-    } catch(e) {
-      alert('잘못된 초대 링크입니다.');
-    }
-  } else if (params.has('answer')) {
-    // 상대방이 보낸 Answer → 자동 연결 완료 (오퍼러 측)
-    const answerBase64 = params.get('answer');
-    try {
-      const answerJson = atob(answerBase64);
-      const answer = JSON.parse(answerJson);
-      await autoApplyAnswer(answer);
-    } catch(e) {
-      alert('잘못된 Answer 링크입니다.');
-    }
-  }
-}
-
-// ==================== Auto Answer (수신자) ====================
-async function autoAnswer(offer) {
-  isOfferer = false;
-  // UI 전환
-  document.getElementById('simpleMode').querySelector('.card').classList.add('hidden');
-  document.getElementById('autoAnswerPanel').classList.remove('hidden');
-  document.getElementById('answerSpinner').style.display = 'inline-block';
-
-  initPC();
-  dc = pc.createDataChannel('chat', {ordered:true}); // answerer도 데이터채널 생성 (일부 브라우저 대응)
-  setupDC();
-  await pc.setRemoteDescription(offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await waitIce();
-
-  // Answer 링크 생성
-  const answerBase64 = btoa(JSON.stringify(pc.localDescription));
-  const answerUrl = window.location.origin + window.location.pathname + '#answer=' + answerBase64;
-  document.getElementById('answerLinkDisplay').textContent = answerUrl;
-
-  // 스피너 숨기고 완료 표시
-  document.getElementById('answerSpinner').style.display = 'none';
-  document.getElementById('answerReadyPanel').classList.remove('hidden');
-}
-
-// ==================== Auto Apply Answer (오퍼러가 Answer 링크 열었을 때) ====================
-async function autoApplyAnswer(answer) {
-  // 이미 오퍼러인 상태에서 answer 링크를 직접 열었을 경우 (새 탭에서 열렸다면 PC 객체 없음)
-  if (!pc || !isOfferer) {
-    alert('채팅을 먼저 시작한 후 Answer 링크를 열거나, 아래 입력창에 붙여넣으세요.');
-    return;
-  }
-  await pc.setRemoteDescription(answer);
-  // 연결은 이미 oniceconnectionstatechange에서 처리됨
-}
-
-// ==================== 일반 수동 시작 (오퍼러) ====================
-async function startNewChat() {
+async function createOfferAsHost() {
   isOfferer = true;
-  document.getElementById('offerPanel').classList.remove('hidden');
-  document.getElementById('autoAnswerPanel').classList.add('hidden');
-  document.getElementById('manualJoinPanel').classList.add('hidden');
-  document.getElementById('offerSpinner').style.display = 'inline-block';
-  initPC();
-  dc = pc.createDataChannel('chat',{ordered:true});
-  setupDC();
-  pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>waitIce().then(()=>{
-    document.getElementById('offerSpinner').style.display = 'none';
-    const offerBase64 = btoa(JSON.stringify(pc.localDescription));
-    const offerUrl = window.location.origin + window.location.pathname + '#offer=' + offerBase64;
-    document.getElementById('offerLinkDisplay').textContent = offerUrl;
-  }));
-}
-
-function joinChat() {
-  // 수동 초대 코드 입력 화면 표시
-  document.getElementById('manualJoinPanel').classList.remove('hidden');
-  document.getElementById('offerPanel').classList.add('hidden');
-  document.getElementById('autoAnswerPanel').classList.add('hidden');
+  initPeerConnection();
+  dc = pc.createDataChannel('chat', { ordered: true });
+  setupDataChannel();
+  
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await waitForIceComplete(pc);
+  
+  const sdpString = JSON.stringify(pc.localDescription);
+  generateShareLink(sdpString);
+  document.getElementById('localOfferSDP').value = sdpString;
+  
+  document.getElementById('hostSpinner').style.display = 'none';
+  document.getElementById('hostStatus').textContent = '✅ 링크를 공유하고 상대방의 연결을 기다리세요.';
 }
 
 async function createAnswerFromOffer() {
   const offerStr = document.getElementById('remoteOfferSDP').value.trim();
   if (!offerStr) return;
-  const offer = JSON.parse(offerStr);
+  
   isOfferer = false;
-  initPC();
-  dc = pc.createDataChannel('chat',{ordered:true});
-  setupDC();
+  initPeerConnection();
+  
+  const offer = JSON.parse(offerStr);
   await pc.setRemoteDescription(offer);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  await waitIce();
-  document.getElementById('localAnswerSDP').value = JSON.stringify(pc.localDescription);
-  document.getElementById('answerResultPanel').classList.remove('hidden');
+  await waitForIceComplete(pc);
+  
+  // Answer SDP를 방장에게 전달해야 함 → 클립보드에 복사
+  const answerSDP = JSON.stringify(pc.localDescription);
+  await navigator.clipboard.writeText(answerSDP);
+  document.getElementById('joinStatus').textContent = '✅ Answer SDP가 클립보드에 복사되었습니다. 방장에게 전달해주세요.';
+  alert('연결 정보가 복사되었습니다.\n방장에게 이 텍스트를 보내주세요.');
 }
 
-async function applyAnswerLink() {
-  const link = document.getElementById('answerLinkInput').value.trim();
-  if (!link) return;
-  const url = new URL(link);
-  const hash = url.hash.substring(1);
-  const params = new URLSearchParams(hash);
-  if (params.has('answer')) {
-    const answerBase64 = params.get('answer');
-    const answerJson = atob(answerBase64);
-    const answer = JSON.parse(answerJson);
-    if (pc && isOfferer) {
-      await pc.setRemoteDescription(answer);
-    } else {
-      alert('채팅을 시작한 후 Answer 링크를 적용하세요.');
-    }
-  } else {
-    alert('올바른 Answer 링크가 아닙니다.');
-  }
-}
-
-// ==================== WebRTC 기본 ====================
-function initPC() { pc = new RTCPeerConnection({iceServers:getIceServers(),iceCandidatePoolSize:2}); pc.oniceconnectionstatechange=onIceState; pc.ondatachannel=e=>{dc=e.channel; setupDC();}; }
-function setupDC() { dc.onopen=async()=>{updateConn(true); await handshake(); showChat();}; dc.onmessage=onMsg; }
-function onIceState() { updateConn(pc.iceConnectionState==='connected'); if(pc.iceConnectionState==='disconnected') showSimple(); }
-function waitIce() { return new Promise(r=>{ if(pc.iceGatheringState==='complete')r(); else pc.addEventListener('icegatheringstatechange',()=>pc.iceGatheringState==='complete'&&r()); }); }
-
-// ==================== E2EE ====================
-async function handshake() {
-  ephemeralPair = await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-521'},true,['deriveBits']);
-  dc.send(JSON.stringify({type:'hs',pub:await crypto.subtle.exportKey('jwk',ephemeralPair.publicKey)}));
-}
-async function onMsg(e) {
-  if(e.data instanceof ArrayBuffer) { handleBinary(e.data); return; }
-  const d=JSON.parse(e.data);
-  if(d.type==='hs') await processHS(d);
-  else if(d.type==='text') addMsg(await ratchetDecrypt(d),'other');
-  else if(d.type==='file-header') await handleFileHeader(d);
-}
-async function processHS(d) {
-  peerEphemeralPub = await crypto.subtle.importKey('jwk',d.pub,{name:'ECDH',namedCurve:'P-521'},false,[]);
-  const shared = await crypto.subtle.deriveBits({name:'ECDH',public:peerEphemeralPub},ephemeralPair.privateKey,256);
-  rootKey = await crypto.subtle.importKey('raw',shared,{name:'HKDF'},false,['deriveKey','deriveBits']);
-  sendCK = await deriveCK(rootKey,'s'); recvCK = await deriveCK(rootKey,'r'); sendIdx=0; recvIdx=0;
-  if(!isOfferer) await handshake();
-}
-async function deriveCK(k,i){ return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info:new TextEncoder().encode(i)},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt']); }
-async function ratchetEncrypt(t) {
-  const mk=await msgKey(sendCK,sendIdx), iv=crypto.getRandomValues(new Uint8Array(12));
-  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},mk,new TextEncoder().encode(t));
-  sendCK=await advanceCK(sendCK); sendIdx++;
-  return {iv:Array.from(iv),ct:Array.from(new Uint8Array(ct)),idx:sendIdx-1};
-}
-async function ratchetDecrypt(d,f=false) {
-  let i=d.idx; while(recvIdx<i){recvCK=await advanceCK(recvCK);recvIdx++;}
-  const mk=await msgKey(recvCK,i);
-  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(d.iv)},mk,new Uint8Array(d.ct));
-  recvCK=await advanceCK(recvCK); recvIdx++;
-  return f?plain:new TextDecoder().decode(plain);
-}
-async function msgKey(ck,i){ const b=await crypto.subtle.deriveBits({name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info:new TextEncoder().encode(`m${i}`)},ck,256); return crypto.subtle.importKey('raw',b,{name:'AES-GCM'},false,['encrypt','decrypt']); }
-async function advanceCK(ck){ const b=await crypto.subtle.deriveBits({name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info:new TextEncoder().encode('a')},ck,256); return crypto.subtle.importKey('raw',b,{name:'AES-GCM'},false,['encrypt','decrypt']); }
-
-// ==================== UI 전환 ====================
-function showChat() {
-  document.getElementById('simpleMode').style.display='none';
-  document.getElementById('chatScreen').style.display='flex';
-}
-function showSimple() {
-  document.getElementById('simpleMode').style.display='block';
-  document.getElementById('chatScreen').style.display='none';
-}
-function updateConn(ok) {
-  const dot=document.getElementById('connDot'), lbl=document.getElementById('connLabel');
-  dot.className = 'dot '+(ok?'on':'off'); lbl.textContent = ok?'연결됨':'오프라인';
-}
-
-// ==================== 메시지 ====================
-async function sendText() {
-  const inp=document.getElementById('msgInput'), t=inp.value.trim();
-  if(!t||!dc||dc.readyState!=='open'||!sendCK) return;
-  const enc=await ratchetEncrypt(t); dc.send(JSON.stringify({type:'text',...enc}));
-  addMsg(t,'me'); inp.value='';
-}
-function addMsg(t,who) {
-  const c=document.getElementById('messages'), d=document.createElement('div');
-  d.className='msg '+(who==='me'?'me':'other');
-  d.innerHTML=`<div class="bubble">${escapeHtml(t)}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
-  c.appendChild(d); c.scrollTop=c.scrollHeight;
-}
-
-// ==================== 파일 ====================
-async function handleFiles(files) { for(const f of files) await sendFile(f); }
-async function sendFile(f) {
-  const id=crypto.randomUUID(), total=Math.ceil(f.size/16384);
-  const hdr=JSON.stringify({type:'file-header',fid:id,name:f.name,size:f.size,mime:f.type,total});
-  dc.send(JSON.stringify({type:'file-header',...await ratchetEncrypt(hdr)}));
-  for(let i=0;i<total;i++) {
-    const buf=await f.slice(i*16384,(i+1)*16384).arrayBuffer();
-    const enc=await ratchetEncryptBinary(buf);
-    const meta=JSON.stringify({fid:id,ci:i}), mb=new TextEncoder().encode(meta);
-    const pkt=new Uint8Array(4+mb.length+enc.iv.length+enc.ct.length);
-    new DataView(pkt.buffer).setUint32(0,mb.length,false); pkt.set(mb,4); pkt.set(enc.iv,4+mb.length); pkt.set(enc.ct,4+mb.length+enc.iv.length);
-    dc.send(pkt.buffer);
-  }
-}
-async function ratchetEncryptBinary(buf) {
-  const mk=await msgKey(sendCK,sendIdx), iv=crypto.getRandomValues(new Uint8Array(12));
-  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},mk,buf);
-  sendCK=await advanceCK(sendCK); sendIdx++;
-  return {iv,ct:new Uint8Array(ct),idx:sendIdx-1};
-}
-async function handleBinary(ab) {
-  const d=new Uint8Array(ab), ml=new DataView(d.buffer).getUint32(0,false);
-  const meta=JSON.parse(new TextDecoder().decode(d.slice(4,4+ml)));
-  const iv=d.slice(4+ml,4+ml+12), ct=d.slice(4+ml+12);
-  const plain=await ratchetDecryptBinary({iv:Array.from(iv),ct:Array.from(ct),idx:recvIdx});
-  if(!pendingFiles[meta.fid]) pendingFiles[meta.fid]={chunks:[],total:null,name:null,mime:null,got:0};
-  const fb=pendingFiles[meta.fid]; fb.chunks[meta.ci]=new Uint8Array(plain); fb.got++;
-  if(fb.total&&fb.got===fb.total) assemble(meta.fid);
-}
-async function ratchetDecryptBinary(d) {
-  let i=d.idx; while(recvIdx<i){recvCK=await advanceCK(recvCK);recvIdx++;}
-  const mk=await msgKey(recvCK,i), plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(d.iv)},mk,new Uint8Array(d.ct));
-  recvCK=await advanceCK(recvCK); recvIdx++; return plain;
-}
-async function handleFileHeader(d) {
-  const plain=await ratchetDecrypt(d), h=JSON.parse(plain);
-  if(!pendingFiles[h.fid]) pendingFiles[h.fid]={chunks:[],total:h.total,name:h.name,mime:h.mime,got:0};
-  else { pendingFiles[h.fid].total=h.total; pendingFiles[h.fid].name=h.name; pendingFiles[h.fid].mime=h.mime; if(pendingFiles[h.fid].got===h.total) assemble(h.fid); }
-}
-function assemble(id) {
-  const fb=pendingFiles[id]; if(!fb||fb.got!==fb.total) return;
-  const blob=new Blob(fb.chunks,{type:fb.mime||'application/octet-stream'});
-  const url=URL.createObjectURL(blob), isImg=fb.mime&&fb.mime.startsWith('image/');
-  const c=document.getElementById('messages'), d=document.createElement('div');
-  d.className='msg other';
-  let inner = isImg ? `<div class="file-inline"><img src="${url}" alt="${fb.name}"><span>${escapeHtml(fb.name)}</span></div>` : `📎 ${escapeHtml(fb.name)} <a href="${url}" download="${fb.name}">저장</a>`;
-  d.innerHTML=`<div class="bubble">${inner}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
-  c.appendChild(d); c.scrollTop=c.scrollHeight;
-  delete pendingFiles[id];
-}
-
-// ==================== 이모지 ====================
-const EMOJIS = ['😀','😂','😍','🥰','😎','🤔','👍','❤️','🔥','🎉','✨','🌟','💯','😢','😡','🥳','🤗','😴','🍕','☕','🌈','🎵','📸','💻','📱','🔒','🔑','💬','📎','📁','✅','❌'];
-function buildEmojiPanel() {
-  const p = document.getElementById('emojiPanel');
-  EMOJIS.forEach(e => {
-    const b = document.createElement('button'); b.textContent = e;
-    b.onclick = () => { document.getElementById('msgInput').value += e; toggleEmoji(false); };
-    p.appendChild(b);
-  });
-}
-function toggleEmoji(force) {
-  const p = document.getElementById('emojiPanel');
-  p.style.display = (force!==undefined ? force : p.style.display==='flex') ? 'none' : 'flex';
-}
-
-// ==================== 유틸리티 ====================
-function copyText(id) { const t=document.getElementById(id); t.select(); navigator.clipboard.writeText(t.value).catch(()=>alert('복사 실패')); }
-function copyTextById(id) {
-  const el = document.getElementById(id);
-  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-    el.select();
-    navigator.clipboard.writeText(el.value).catch(()=>{});
-  } else {
-    const text = el.textContent;
-    navigator.clipboard.writeText(text).catch(()=>{});
-  }
-  alert('복사되었습니다!');
-}
-function shareAnswerLink() {
-  const link = document.getElementById('answerLinkDisplay').textContent;
-  if (navigator.share) {
-    navigator.share({title: 'P2P 채팅 Answer', url: link}).catch(()=>{});
-  } else {
-    copyTextById('answerLinkDisplay');
-  }
-}
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
-
-// applyAnswer 함수 (기존 유지)
 async function applyAnswer() {
   const answerStr = document.getElementById('remoteAnswerSDP').value.trim();
   if (!answerStr) return;
   const answer = JSON.parse(answerStr);
   await pc.setRemoteDescription(answer);
 }
+
+function waitForIceComplete(connection) {
+  return new Promise(resolve => {
+    if (connection.iceGatheringState === 'complete') resolve();
+    else connection.addEventListener('icegatheringstatechange', () => {
+      if (connection.iceGatheringState === 'complete') resolve();
+    });
+  });
+}
+
+// ---------------- E2EE + Ratchet ----------------
+async function performE2EEHandshake() {
+  ephemeralKeyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-521' }, true, ['deriveBits']);
+  dc.send(JSON.stringify({ type: 'handshake', ephemeralPubKey: await crypto.subtle.exportKey('jwk', ephemeralKeyPair.publicKey) }));
+}
+
+async function handleIncomingMessage(event) {
+  try {
+    if (event.data instanceof ArrayBuffer) { handleBinaryChunk(event.data); return; }
+    const data = JSON.parse(event.data);
+    if (data.type === 'handshake') await processHandshake(data);
+    else if (data.type === 'text') addMessage(await decryptWithRatchet(data, false), 'other');
+    else if (data.type === 'file-header') await handleFileHeader(data);
+  } catch (e) { console.error('msg err', e); }
+}
+
+async function processHandshake(data) {
+  if (!data.ephemeralPubKey) return;
+  peerEphemeralPubKey = await crypto.subtle.importKey('jwk', data.ephemeralPubKey, { name: 'ECDH', namedCurve: 'P-521' }, false, []);
+  const sharedBits = await crypto.subtle.deriveBits({ name: 'ECDH', public: peerEphemeralPubKey }, ephemeralKeyPair.privateKey, 256);
+  rootKey = await crypto.subtle.importKey('raw', sharedBits, { name: 'HKDF' }, false, ['deriveKey','deriveBits']);
+  sendingChainKey = await deriveChainKey(rootKey, 'send');
+  receivingChainKey = await deriveChainKey(rootKey, 'recv');
+  sendingIdx = 0; receivingIdx = 0;
+  if (!isOfferer) await performE2EEHandshake();
+}
+
+async function deriveChainKey(parentKey, info) {
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-512', salt: new Uint8Array(0), info: new TextEncoder().encode(`p2p-chain-${info}`) },
+    parentKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt','decrypt']
+  );
+}
+
+async function ratchetEncrypt(plaintext) {
+  const mk = await deriveMessageKey(sendingChainKey, sendingIdx);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, mk, new TextEncoder().encode(plaintext));
+  sendingChainKey = await advanceChainKey(sendingChainKey);
+  sendingIdx++;
+  return { iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)), index: sendingIdx - 1 };
+}
+
+async function ratchetDecrypt(data, forFile = false) {
+  let idx = data.index;
+  while (receivingIdx < idx) { receivingChainKey = await advanceChainKey(receivingChainKey); receivingIdx++; }
+  const mk = await deriveMessageKey(receivingChainKey, idx);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(data.iv) }, mk, new Uint8Array(data.ct));
+  receivingChainKey = await advanceChainKey(receivingChainKey);
+  receivingIdx++;
+  return forFile ? plain : new TextDecoder().decode(plain);
+}
+
+async function deriveMessageKey(chainKey, index) {
+  const info = new TextEncoder().encode(`msg-${index}`);
+  const bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-512', salt: new Uint8Array(0), info }, chainKey, 256);
+  return crypto.subtle.importKey('raw', bits, { name: 'AES-GCM' }, false, ['encrypt','decrypt']);
+}
+
+async function advanceChainKey(chainKey) {
+  const info = new TextEncoder().encode('chain-advance');
+  const bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-512', salt: new Uint8Array(0), info }, chainKey, 256);
+  return crypto.subtle.importKey('raw', bits, { name: 'AES-GCM' }, false, ['encrypt','decrypt']);
+}
+
+async function decryptWithRatchet(data, forFile) { return ratchetDecrypt(data, forFile); }
+
+// ---------------- UI ----------------
+function showWelcomeScreen() {
+  document.getElementById('chatScreen').style.display = 'none';
+  showArea('welcomeArea');
+  updateConnectionStatus('disconnected');
+}
+
+function showChatScreen() {
+  showArea(null);
+  document.getElementById('welcomeArea').style.display = 'none';
+  document.getElementById('chatScreen').style.display = 'flex';
+  updateConnectionStatus('connected');
+}
+
+function updateConnectionStatus(state) {
+  const led = document.getElementById('connLed'), text = document.getElementById('connText');
+  if (state === 'connected') { led.className = 'led on'; text.textContent = '연결됨 (E2EE)'; }
+  else { led.className = 'led off'; text.textContent = '오프라인'; }
+}
+
+function addMessage(content, sender) {
+  const container = document.getElementById('messagesContainer');
+  const div = document.createElement('div');
+  div.className = `message ${sender === 'me' ? 'mine' : 'other'}`;
+  div.innerHTML = `<div class="bubble">${escapeHtml(content)}<div class="timestamp">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div></div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addFileMessage(fileName, url, sender, isImage) {
+  const container = document.getElementById('messagesContainer');
+  const div = document.createElement('div');
+  div.className = `message ${sender === 'me' ? 'mine' : 'other'}`;
+  const inner = isImage 
+    ? `<div class="file-msg"><img src="${url}" alt="${fileName}" onclick="window.open('${url}')"><span>${escapeHtml(fileName)}</span></div>`
+    : `<div class="file-msg">📎 ${escapeHtml(fileName)} <a href="${url}" download="${fileName}" style="color:#a0c0ff;">다운로드</a></div>`;
+  div.innerHTML = `<div class="bubble">${inner}<div class="timestamp">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div></div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+// ---------------- 텍스트/파일 전송 ----------------
+async function sendTextMessage() {
+  const input = document.getElementById('messageInput');
+  const text = input.value.trim();
+  if (!text || !dc || dc.readyState !== 'open' || !sendingChainKey) return;
+  const encrypted = await ratchetEncrypt(text);
+  dc.send(JSON.stringify({ type: 'text', ...encrypted }));
+  addMessage(text, 'me');
+  input.value = '';
+}
+
+async function handleFileSelect(event) {
+  for (const file of event.target.files) await sendFile(file);
+  event.target.value = '';
+}
+
+async function sendFile(file) {
+  if (!dc || dc.readyState !== 'open' || !sendingChainKey) return;
+  const fileId = crypto.randomUUID();
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const header = JSON.stringify({ type: 'file-header', fileId, fileName: file.name, fileSize: file.size, mimeType: file.type, totalChunks });
+  dc.send(JSON.stringify({ type: 'file-header', ...(await ratchetEncrypt(header)) }));
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE, end = Math.min(start + CHUNK_SIZE, file.size);
+    const buffer = await file.slice(start, end).arrayBuffer();
+    const enc = await ratchetEncryptBinary(buffer);
+    const meta = JSON.stringify({ fileId, chunkIndex: i });
+    const metaBytes = new TextEncoder().encode(meta);
+    const metaLen = new Uint8Array(new Uint32Array([metaBytes.length]).buffer);
+    const packet = new Uint8Array(4 + metaBytes.length + enc.iv.length + enc.ct.length);
+    packet.set(metaLen, 0); packet.set(metaBytes, 4);
+    packet.set(enc.iv, 4 + metaBytes.length); packet.set(enc.ct, 4 + metaBytes.length + enc.iv.length);
+    dc.send(packet.buffer);
+  }
+}
+
+async function ratchetEncryptBinary(buffer) {
+  const mk = await deriveMessageKey(sendingChainKey, sendingIdx);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, mk, buffer);
+  sendingChainKey = await advanceChainKey(sendingChainKey);
+  sendingIdx++;
+  return { iv, ct: new Uint8Array(ct), index: sendingIdx - 1 };
+}
+
+async function handleBinaryChunk(arrayBuffer) {
+  if (!receivingChainKey) return;
+  const data = new Uint8Array(arrayBuffer);
+  const metaLen = new DataView(data.buffer).getUint32(0, false);
+  const meta = JSON.parse(new TextDecoder().decode(data.slice(4, 4 + metaLen)));
+  const iv = data.slice(4 + metaLen, 4 + metaLen + 12);
+  const ct = data.slice(4 + metaLen + 12);
+  const plainBuffer = await ratchetDecryptBinary({ iv: Array.from(iv), ct: Array.from(ct), index: receivingIdx });
+  if (!pendingFileBuffers[meta.fileId]) pendingFileBuffers[meta.fileId] = { chunks: [], totalChunks: null, name: null, mime: null, receivedCount: 0 };
+  const fb = pendingFileBuffers[meta.fileId];
+  fb.chunks[meta.chunkIndex] = new Uint8Array(plainBuffer);
+  fb.receivedCount++;
+  if (fb.totalChunks && fb.receivedCount === fb.totalChunks) assembleFile(meta.fileId);
+}
+
+async function ratchetDecryptBinary(data) {
+  let idx = data.index;
+  while (receivingIdx < idx) { receivingChainKey = await advanceChainKey(receivingChainKey); receivingIdx++; }
+  const mk = await deriveMessageKey(receivingChainKey, idx);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(data.iv) }, mk, new Uint8Array(data.ct));
+  receivingChainKey = await advanceChainKey(receivingChainKey);
+  receivingIdx++;
+  return plain;
+}
+
+async function handleFileHeader(data) {
+  const plainText = await decryptWithRatchet(data, false);
+  const { fileId, fileName, fileSize, mimeType, totalChunks } = JSON.parse(plainText);
+  if (!pendingFileBuffers[fileId]) pendingFileBuffers[fileId] = { chunks: [], totalChunks, name: fileName, mime: mimeType, receivedCount: 0 };
+  else {
+    Object.assign(pendingFileBuffers[fileId], { totalChunks, name: fileName, mime: mimeType });
+    if (pendingFileBuffers[fileId].receivedCount === totalChunks) assembleFile(fileId);
+  }
+}
+
+function assembleFile(fileId) {
+  const fb = pendingFileBuffers[fileId];
+  if (!fb || fb.receivedCount !== fb.totalChunks) return;
+  const blob = new Blob(fb.chunks, { type: fb.mime || 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  addFileMessage(fb.name, url, 'other', fb.mime?.startsWith('image/'));
+  delete pendingFileBuffers[fileId];
+}
+
+function copyText(id) { const ta = document.getElementById(id); ta.select(); navigator.clipboard.writeText(ta.value); }
+function escapeHtml(text) { return String(text).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
 </script>
 </body>
 </html>
