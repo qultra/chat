@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>P2P 메신저 – 암호화 핸드셰이크 수정판</title>
+  <title>P2P 메신저 – 최종 안정판</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -162,7 +162,7 @@
 </div>
 <script>
 // ---------------- 전역 변수 ----------------
-const ID_STORAGE_KEY = 'p2p_identity_fixed';
+const ID_STORAGE_KEY = 'p2p_identity_v3';
 const CHUNK_SIZE = 16 * 1024;
 let idKeyPair, idPubJwkStr;
 let ephemeralKeyPair, peerEphemeralPubKey;
@@ -310,10 +310,7 @@ function initPeerConnection(){
   pc.ondatachannel = (event) => {
     dc = event.channel;
     setupDataChannel();
-    // ★ 이미 데이터 채널이 열려 있으면 바로 핸드셰이크 시작
-    if (dc.readyState === 'open') {
-      startE2EEIfNeeded();
-    }
+    if (dc.readyState === 'open') startE2EEIfNeeded();
   };
 }
 function setupDataChannel(){
@@ -324,7 +321,6 @@ function setupDataChannel(){
   dc.onmessage = handleIncomingMessage;
 }
 
-// ★ 데이터 채널이 열렸을 때 E2EE 시작 (중복 방지)
 function startE2EEIfNeeded() {
   if (!handshakeDone && dc && dc.readyState === 'open') {
     performE2EEHandshake();
@@ -336,10 +332,7 @@ async function createOfferAsHost(){
   initPeerConnection();
   dc = pc.createDataChannel('chat',{ordered:true});
   setupDataChannel();
-  // 이미 open 상태일 수 있으므로 확인
-  if (dc.readyState === 'open') {
-    startE2EEIfNeeded();
-  }
+  if (dc.readyState === 'open') startE2EEIfNeeded();
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   await waitForIceComplete(pc);
@@ -390,7 +383,7 @@ function waitForIceComplete(connection){
   });
 }
 
-// E2EE + Ratchet
+// ★ 수정된 E2EE + Ratchet (raw bits → importKey 방식)
 async function performE2EEHandshake(){
   ephemeralKeyPair = await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-521'},true,['deriveBits']);
   dc.send(JSON.stringify({type:'handshake',ephemeralPubKey: await crypto.subtle.exportKey('jwk',ephemeralKeyPair.publicKey)}));
@@ -410,11 +403,13 @@ async function processHandshake(data){
   if(!data.ephemeralPubKey) return;
   peerEphemeralPubKey = await crypto.subtle.importKey('jwk',data.ephemeralPubKey,{name:'ECDH',namedCurve:'P-521'},false,[]);
   const sharedBits = await crypto.subtle.deriveBits({name:'ECDH',public:peerEphemeralPubKey},ephemeralKeyPair.privateKey,256);
-  rootKey = await crypto.subtle.importKey('raw',sharedBits,{name:'HKDF'},false,['deriveKey','deriveBits']);
+  // rootKey를 raw bits로 import (HKDF 용)
+  rootKey = await crypto.subtle.importKey('raw',sharedBits,{name:'HKDF'},false,['deriveBits']);
+  // 체인키를 raw bits로 바로 import (AES-GCM)
   sendingChainKey = await deriveChainKey(rootKey,'send');
   receivingChainKey = await deriveChainKey(rootKey,'recv');
   sendingIdx = 0; receivingIdx = 0;
-  if(!isOfferer) await performE2EEHandshake(); // answerer 응답
+  if(!isOfferer) await performE2EEHandshake();
   if(!handshakeDone){
     handshakeDone = true;
     showChatScreen();
@@ -422,41 +417,55 @@ async function processHandshake(data){
 }
 
 async function deriveChainKey(parentKey,info){
-  return crypto.subtle.deriveKey(
+  const bits = await crypto.subtle.deriveBits(
     {name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info:new TextEncoder().encode(`p2p-chain-${info}`)},
-    parentKey,{name:'AES-GCM',length:256},false,['encrypt','decrypt']
+    parentKey, 256
   );
+  return crypto.subtle.importKey('raw',bits,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
 }
+
+async function deriveMessageKey(chainKey,index){
+  const bits = await crypto.subtle.deriveBits(
+    {name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info:new TextEncoder().encode(`msg-${index}`)},
+    chainKey, 256
+  );
+  return crypto.subtle.importKey('raw',bits,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+
+async function advanceChainKey(chainKey){
+  const bits = await crypto.subtle.deriveBits(
+    {name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info:new TextEncoder().encode('chain-advance')},
+    chainKey, 256
+  );
+  return crypto.subtle.importKey('raw',bits,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+
 async function ratchetEncrypt(plaintext){
-  const mk = await deriveMessageKey(sendingChainKey,sendingIdx);
+  if(!sendingChainKey) throw new Error('암호화 키 없음');
+  const mk = await deriveMessageKey(sendingChainKey, sendingIdx);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({name:'AES-GCM',iv},mk,new TextEncoder().encode(plaintext));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM',iv}, mk, new TextEncoder().encode(plaintext));
   sendingChainKey = await advanceChainKey(sendingChainKey);
   sendingIdx++;
-  return {iv:Array.from(iv),ct:Array.from(new Uint8Array(ct)),index:sendingIdx-1};
+  return {iv:Array.from(iv), ct:Array.from(new Uint8Array(ct)), index:sendingIdx-1};
 }
+
 async function ratchetDecrypt(data,forFile=false){
   let idx = data.index;
-  while(receivingIdx < idx){ receivingChainKey = await advanceChainKey(receivingChainKey); receivingIdx++; }
-  const mk = await deriveMessageKey(receivingChainKey,idx);
-  const plain = await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(data.iv)},mk,new Uint8Array(data.ct));
+  while(receivingIdx < idx){
+    receivingChainKey = await advanceChainKey(receivingChainKey);
+    receivingIdx++;
+  }
+  const mk = await deriveMessageKey(receivingChainKey, idx);
+  const iv = new Uint8Array(data.iv);
+  const ct = new Uint8Array(data.ct);
+  const plain = await crypto.subtle.decrypt({name:'AES-GCM',iv}, mk, ct);
   receivingChainKey = await advanceChainKey(receivingChainKey);
   receivingIdx++;
   return forFile ? plain : new TextDecoder().decode(plain);
 }
-async function deriveMessageKey(chainKey,index){
-  const info = new TextEncoder().encode(`msg-${index}`);
-  const bits = await crypto.subtle.deriveBits({name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info},chainKey,256);
-  return crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['encrypt','decrypt']);
-}
-async function advanceChainKey(chainKey){
-  const info = new TextEncoder().encode('chain-advance');
-  const bits = await crypto.subtle.deriveBits({name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info},chainKey,256);
-  return crypto.subtle.importKey('raw',bits,{name:'AES-GCM'},false,['encrypt','decrypt']);
-}
-async function decryptWithRatchet(data,forFile){ return ratchetDecrypt(data,forFile); }
 
-// UI 표시
+// ---------------- UI ----------------
 function showWelcomeScreen(){
   isChatScreenActive = false;
   document.getElementById('chatScreen').style.display='none';
