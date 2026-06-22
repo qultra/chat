@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>P2P 메신저 - 1:1, 그룹, 오픈채널</title>
+  <title>P2P 메신저 – 메시지 송수신 정상 작동</title>
   <style>
     :root {
       --bg: #0b0e14; --surface: #141a24; --card-bg: rgba(20,26,36,0.8);
@@ -127,7 +127,7 @@
   </div>
 
   <div class="main-view" id="mainView">
-    <!-- 방 목록 화면 -->
+    <!-- 방 목록 -->
     <div id="roomListView" style="display:block;">
       <div class="card">
         <div class="btn-group">
@@ -143,7 +143,7 @@
       <div id="roomListContainer" class="room-list"></div>
     </div>
 
-    <!-- 방 생성 화면 -->
+    <!-- 방 생성 -->
     <div id="createRoomView" style="display:none;">
       <div class="card">
         <button class="btn" onclick="showRoomList()" style="width:auto;">← 뒤로</button>
@@ -163,7 +163,7 @@
       </div>
     </div>
 
-    <!-- 방 참가 화면 -->
+    <!-- 방 참가 -->
     <div id="joinRoomView" style="display:none;">
       <div class="card">
         <button class="btn" onclick="showRoomList()" style="width:auto;">← 뒤로</button>
@@ -199,7 +199,7 @@
 
 <script>
 // ==================== 전역 상태 ====================
-const ROOMS_KEY = 'p2p_rooms_v6';
+const ROOMS_KEY = 'p2p_rooms_v7';
 const MSG_PREFIX = 'p2p_msg_';
 
 let rooms = [];
@@ -207,8 +207,8 @@ let activeRoomId = null;
 let activePassword = null;
 let sharedKey = null;
 let myPeerId = 'peer-' + crypto.randomUUID().slice(0,8);
-let peers = {};            // { peerId: { pc, dc } }
-let connectedPeers = [];   // 현재 데이터 채널이 open된 peerId들
+let peers = {};            // { peerId: { pc, dc } } – local은 내 오퍼용
+let connectedPeers = [];   // 실제 원격 피어 ID 목록 (local 제외)
 
 // 초기화
 loadRooms();
@@ -266,15 +266,14 @@ function renderRoomList() {
   `).join('');
 }
 
-// ==================== 방 생성 (연결 유지) ====================
+// ==================== 방 생성 ====================
 async function createNewRoom() {
   const name = document.getElementById('newRoomName').value.trim() || '새 채팅방';
   const type = document.getElementById('newRoomType').value;
   const password = document.getElementById('newRoomPassword').value;
   if (!password) return alert('방 암호를 설정하세요.');
 
-  // 이전 연결 정리
-  closeAllPeers();
+  closeAllPeers(); // 기존 연결 정리
 
   const room = {
     id: crypto.randomUUID(),
@@ -287,14 +286,13 @@ async function createNewRoom() {
   activePassword = password;
   await deriveKey(password);
 
-  // 호스트는 'local' 피어를 생성하고 유지
+  // 호스트 offer 생성 (내부에서 peers['local'] 생성됨)
   await createLocalOfferForRoom(room.id);
   const offer = peers['local'].pc.localDescription;
   const link = `${location.origin}${location.pathname}#join=${room.id}&offer=${btoa(JSON.stringify(offer))}`;
   document.getElementById('inviteLink').textContent = link;
   document.getElementById('createdRoomInfo').style.display = 'block';
 
-  // 바로 채팅방 입장 (피어 파괴하지 않음)
   enterRoom(room.id);
 }
 
@@ -303,7 +301,7 @@ function copyInviteLink() {
   navigator.clipboard.writeText(link).then(() => alert('복사 완료!'));
 }
 
-// ==================== 방 참가 (연결 유지) ====================
+// ==================== 방 참가 ====================
 async function joinRoomViaCode() {
   const password = document.getElementById('joinPassword').value;
   const code = document.getElementById('joinOfferCode').value.trim();
@@ -333,14 +331,12 @@ async function joinRoomViaCode() {
   if (!offerObj || !password) return alert('암호와 초대 코드(또는 링크)가 필요합니다.');
   if (!roomId) roomId = crypto.randomUUID();
 
-  // 이전 연결 정리
   closeAllPeers();
-
   activePassword = password;
   await deriveKey(password);
 
   const peerId = 'remote-' + Date.now();
-  await connectToPeer(offerObj, peerId); // 연결 생성, dc는 ondatachannel에서 설정
+  await connectToPeer(offerObj, peerId);  // 이 안에서 피어 생성 및 dc 저장 보장
 
   let room = rooms.find(r => r.id === roomId);
   if (!room) {
@@ -355,18 +351,16 @@ async function joinRoomViaCode() {
   enterRoom(roomId);
 }
 
-// ==================== 방 입장 (연결 유지, UI 설정) ====================
+// ==================== 방 입장 (UI만) ====================
 function enterRoom(roomId) {
   const room = rooms.find(r => r.id === roomId);
   if (!room) return;
   activeRoomId = roomId;
   activePassword = room.password;
-  // sharedKey는 이미 유도된 상태 가정 (createNewRoom/joinRoomViaCode에서 이미 유도)
-  // 만약 목록에서 재입장 시에는 deriveKey가 필요하므로 처리 추가
+
+  // 만약 sharedKey가 아직 없다면 유도 (ex: 목록에서 재진입)
   if (!sharedKey) {
-    deriveKey(room.password).then(() => {
-      setupChatUI(room);
-    });
+    deriveKey(room.password).then(() => setupChatUI(room));
   } else {
     setupChatUI(room);
   }
@@ -380,41 +374,45 @@ function setupChatUI(room) {
     appendMessageToContainer(msg.text, msg.sender === myPeerId ? 'mine' : 'other');
   });
 
-  // 연결된 피어 목록은 이미 peers 객체에 존재하며, onopen 이벤트로 connectedPeers에 추가됨
   updateMemberListUI();
   updateOnlineStatus();
   showChat();
 }
 
-// ==================== WebRTC 피어 관리 ====================
+// ==================== WebRTC – 핵심 수정 ====================
 async function createLocalOfferForRoom(roomId) {
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.services.mozilla.com:3478' }] });
   const dc = pc.createDataChannel('chat');
+  // 로컬 피어 엔트리 미리 생성
+  peers['local'] = { pc, dc };
   setupDataChannel(dc, 'local');
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   await waitForIce(pc);
-  peers['local'] = { pc, dc };
   monitorPeerConnection(pc, 'local');
 }
 
 async function connectToPeer(offer, peerId) {
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.services.mozilla.com:3478' }] });
-  pc.ondatachannel = (e) => setupDataChannel(e.channel, peerId);
+  // ★ 중요: ondatachannel 이벤트 전에 peers[peerId] 생성
+  peers[peerId] = { pc, dc: null };
+  pc.ondatachannel = (e) => {
+    // 이 시점에서 peers[peerId]는 확실히 존재함
+    setupDataChannel(e.channel, peerId);
+  };
   await pc.setRemoteDescription(offer);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   await waitForIce(pc);
-  peers[peerId] = { pc, dc: null }; // dc는 ondatachannel에서 설정됨
   monitorPeerConnection(pc, peerId);
 }
 
 function setupDataChannel(dc, peerId) {
   dc.onopen = () => {
-    if (!connectedPeers.includes(peerId)) {
+    // local 피어는 connectedPeers에 추가하지 않음 (온라인 상태는 원격 피어만)
+    if (peerId !== 'local' && !connectedPeers.includes(peerId)) {
       connectedPeers.push(peerId);
       updateMemberListUI();
-      // 방 멤버 목록에도 반영
       const room = rooms.find(r => r.id === activeRoomId);
       if (room && !room.members.includes(peerId)) {
         room.members.push(peerId);
@@ -425,20 +423,24 @@ function setupDataChannel(dc, peerId) {
   };
   dc.onmessage = (e) => handleMessage(e.data, peerId);
   dc.onclose = () => {
-    connectedPeers = connectedPeers.filter(id => id !== peerId);
-    updateMemberListUI();
-    updateOnlineStatus();
+    if (peerId !== 'local') {
+      connectedPeers = connectedPeers.filter(id => id !== peerId);
+      updateMemberListUI();
+      updateOnlineStatus();
+    }
   };
-  // 피어 객체에 dc 저장
+  // dc를 peers 객체에 저장 (local은 이미 되어 있음, remote는 dc: null → 교체)
   if (peers[peerId]) peers[peerId].dc = dc;
 }
 
 function monitorPeerConnection(pc, peerId) {
   pc.oniceconnectionstatechange = () => {
     if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-      connectedPeers = connectedPeers.filter(id => id !== peerId);
-      updateMemberListUI();
-      updateOnlineStatus();
+      if (peerId !== 'local') {
+        connectedPeers = connectedPeers.filter(id => id !== peerId);
+        updateMemberListUI();
+        updateOnlineStatus();
+      }
     }
   };
 }
@@ -450,7 +452,7 @@ async function sendMessage() {
   if (!text || !sharedKey) return;
 
   const encrypted = await encrypt(text);
-  // 모든 활성 피어에게 전송
+  // 모든 활성 피어에게 전송 (local 포함, 데이터 채널이 열려 있으면 상대에게 전달됨)
   Object.values(peers).forEach(({ dc }) => {
     if (dc && dc.readyState === 'open') {
       dc.send(JSON.stringify({ type: 'msg', ...encrypted }));
@@ -517,7 +519,6 @@ async function decrypt(data) {
 // ==================== 초대 / 나가기 ====================
 async function inviteToCurrentRoom() {
   if (!activeRoomId) return;
-  // 이미 local 피어가 있다면 재사용, 없으면 생성
   if (!peers['local']) {
     await createLocalOfferForRoom(activeRoomId);
   }
