@@ -82,7 +82,6 @@
       background: rgba(91,141,239,0.2); color: #93c5fd;
     }
 
-    #chatScreen { display: none; flex-direction: column; flex:1; }
     .chat-header {
       display: flex; justify-content: space-between; align-items: center;
       padding-bottom: 10px; border-bottom: 1px solid var(--border);
@@ -129,7 +128,7 @@
 
   <div class="main-view" id="mainView">
     <!-- 방 목록 화면 -->
-    <div id="roomListView">
+    <div id="roomListView" style="display:block;">
       <div class="card">
         <div class="btn-group">
           <button class="btn primary" onclick="showCreateRoom()">✨ 새 채팅</button>
@@ -145,7 +144,7 @@
     </div>
 
     <!-- 방 생성 화면 -->
-    <div id="createRoomView" class="hidden">
+    <div id="createRoomView" style="display:none;">
       <div class="card">
         <button class="btn" onclick="showRoomList()" style="width:auto;">← 뒤로</button>
         <input type="text" id="newRoomName" placeholder="방 이름" class="mt">
@@ -157,15 +156,15 @@
         <input type="password" id="newRoomPassword" placeholder="방 암호 (참가자에게 알려주세요)" class="mt">
         <button class="btn primary mt" onclick="createNewRoom()">방 만들기</button>
       </div>
-      <div id="createdRoomInfo" class="hidden card">
+      <div id="createdRoomInfo" style="display:none;" class="card">
         <p class="text-secondary">초대 링크 (복사해서 공유)</p>
-        <div class="link-box" id="inviteLink" style="background:#0f131c; padding:10px; border-radius:10px; word-break:break-all; font-size:0.75rem; margin:6px 0;"></div>
+        <div id="inviteLink" style="background:#0f131c; padding:10px; border-radius:10px; word-break:break-all; font-size:0.75rem; margin:6px 0;"></div>
         <button class="btn" onclick="copyInviteLink()">📋 링크 복사</button>
       </div>
     </div>
 
     <!-- 방 참가 화면 -->
-    <div id="joinRoomView" class="hidden">
+    <div id="joinRoomView" style="display:none;">
       <div class="card">
         <button class="btn" onclick="showRoomList()" style="width:auto;">← 뒤로</button>
         <input type="password" id="joinPassword" placeholder="방 암호" class="mt">
@@ -175,7 +174,7 @@
     </div>
 
     <!-- 채팅 화면 -->
-    <div id="chatScreen">
+    <div id="chatScreen" style="display:none; flex-direction:column; flex:1;">
       <div class="chat-header">
         <div>
           <strong id="currentRoomName"></strong>
@@ -200,46 +199,50 @@
 
 <script>
 // ==================== 전역 상태 ====================
-const ROOMS_KEY = 'p2p_rooms_v4';
+const ROOMS_KEY = 'p2p_rooms_v5';
 const MSG_PREFIX = 'p2p_msg_';
 
-let rooms = [];                // { id, name, type, password, createdAt, members[] }
+let rooms = [];
 let activeRoomId = null;
 let activePassword = null;
-let sharedKey = null;        // AES-GCM CryptoKey
+let sharedKey = null;
 let myPeerId = 'peer-' + crypto.randomUUID().slice(0,8);
-let peers = {};              // { peerId: { pc, dc } }
-let connectedPeers = [];     // 현재 연결된 peerId 목록
+let peers = {};
+let connectedPeers = [];
 
-// 초기 로드
+// 초기화
 loadRooms();
 showRoomList();
 window.addEventListener('hashchange', handleHash);
 handleHash();
 
-// ==================== 데이터 영속성 ====================
+// ==================== 데이터 ====================
 function loadRooms() {
-  const data = localStorage.getItem(ROOMS_KEY);
-  rooms = data ? JSON.parse(data) : [];
+  rooms = JSON.parse(localStorage.getItem(ROOMS_KEY) || '[]');
 }
 function saveRooms() {
   localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
 }
 function loadMessages(roomId) {
-  const data = localStorage.getItem(MSG_PREFIX + roomId);
-  return data ? JSON.parse(data) : [];
+  return JSON.parse(localStorage.getItem(MSG_PREFIX + roomId) || '[]');
 }
 function saveMessages(roomId, msgs) {
   localStorage.setItem(MSG_PREFIX + roomId, JSON.stringify(msgs.slice(-500)));
 }
 
-// ==================== 화면 전환 ====================
+// ==================== 뷰 전환 (수정됨) ====================
 function showView(viewId) {
-  document.getElementById('roomListView').classList.add('hidden');
-  document.getElementById('createRoomView').classList.add('hidden');
-  document.getElementById('joinRoomView').classList.add('hidden');
-  document.getElementById('chatScreen').classList.add('hidden');
-  if (viewId) document.getElementById(viewId).classList.remove('hidden');
+  // 모든 뷰 숨기기
+  document.getElementById('roomListView').style.display = 'none';
+  document.getElementById('createRoomView').style.display = 'none';
+  document.getElementById('joinRoomView').style.display = 'none';
+  document.getElementById('chatScreen').style.display = 'none';
+
+  if (viewId === 'chatScreen') {
+    document.getElementById('chatScreen').style.display = 'flex';
+  } else if (viewId) {
+    document.getElementById(viewId).style.display = 'block';
+  }
 }
 
 function showRoomList() { showView('roomListView'); renderRoomList(); }
@@ -249,8 +252,8 @@ function showChat() { showView('chatScreen'); }
 
 function renderRoomList() {
   const container = document.getElementById('roomListContainer');
-  if (rooms.length === 0) {
-    container.innerHTML = '<p class="text-secondary" style="text-align:center; margin-top:30px;">아직 채팅방이 없습니다.<br>새 채팅을 시작하거나 초대 코드로 참가하세요.</p>';
+  if (!rooms.length) {
+    container.innerHTML = '<p class="text-secondary" style="text-align:center; margin-top:30px;">아직 채팅방이 없습니다.</p>';
     return;
   }
   container.innerHTML = rooms.map(room => `
@@ -282,15 +285,13 @@ async function createNewRoom() {
   activePassword = password;
   await deriveKey(password);
 
-  // 내 Offer 생성 (누군가 들어올 때까지 대기)
+  // 로컬 Offer 생성
   await createLocalOfferForRoom(room.id);
-
   const offer = peers['local'].pc.localDescription;
   const link = `${location.origin}${location.pathname}#join=${room.id}&offer=${btoa(JSON.stringify(offer))}`;
   document.getElementById('inviteLink').textContent = link;
-  document.getElementById('createdRoomInfo').classList.remove('hidden');
+  document.getElementById('createdRoomInfo').style.display = 'block';
 
-  // 바로 채팅방 입장
   enterRoom(room.id);
 }
 
@@ -299,24 +300,24 @@ function copyInviteLink() {
   navigator.clipboard.writeText(link).then(() => alert('복사 완료!'));
 }
 
-// ==================== 방 참가 (코드) ====================
+// ==================== 방 참가 ====================
 async function joinRoomViaCode() {
   const password = document.getElementById('joinPassword').value;
   const code = document.getElementById('joinOfferCode').value.trim();
 
   let offerObj, roomId;
+
+  // 코드 파싱
   if (code) {
-    // 초대 코드가 JSON일 수 있음 (수동 입력)
-    try { offerObj = JSON.parse(code); } catch (e) {
-      // URL 형태인지 확인
-      if (code.startsWith('http')) {
-        const url = new URL(code);
-        const params = new URLSearchParams(url.hash.substring(1));
-        if (params.has('offer') && params.has('join')) {
-          offerObj = JSON.parse(atob(params.get('offer')));
-          roomId = params.get('join');
-        }
+    if (code.startsWith('http')) {
+      const url = new URL(code);
+      const params = new URLSearchParams(url.hash.substring(1));
+      if (params.has('offer') && params.has('join')) {
+        offerObj = JSON.parse(atob(params.get('offer')));
+        roomId = params.get('join');
       }
+    } else {
+      try { offerObj = JSON.parse(code); } catch (e) {}
     }
   } else {
     // URL에서 가져오기
@@ -329,16 +330,14 @@ async function joinRoomViaCode() {
   }
 
   if (!offerObj || !password) return alert('암호와 초대 코드(또는 링크)가 필요합니다.');
-  if (!roomId) roomId = crypto.randomUUID(); // 없으면 새로
+  if (!roomId) roomId = crypto.randomUUID();
 
   activePassword = password;
   await deriveKey(password);
 
-  // 피어 연결
   const peerId = 'remote-' + Date.now();
   await connectToPeer(offerObj, peerId);
 
-  // 방이 이미 목록에 있으면 추가하지 않고, 없으면 추가
   let room = rooms.find(r => r.id === roomId);
   if (!room) {
     room = { id: roomId, name: '참가한 채팅방', type: 'group', password, createdAt: Date.now(), members: [myPeerId] };
@@ -348,6 +347,7 @@ async function joinRoomViaCode() {
     room.members.push(myPeerId);
     saveRooms();
   }
+
   enterRoom(roomId);
 }
 
@@ -359,30 +359,23 @@ async function enterRoom(roomId) {
   activePassword = room.password;
   await deriveKey(room.password);
 
-  // 기존 연결 정리
   closeAllPeers();
+  connectedPeers = []; // 실제 연결된 피어 없음
 
-  // 만약 내가 방장(offer) 피어를 가지고 있다면 복구
-  // 그렇지 않으면, 연결된 피어가 없으므로 멤버 목록만 표시
-  connectedPeers = room.members.filter(id => id !== myPeerId);
-  // 실제 연결된 피어는 아직 없으므로 connectedPeers는 잠재적 목록
-
-  // UI 업데이트
   document.getElementById('currentRoomName').textContent = room.name;
-  renderMessages(roomId);
+  // 메시지 불러오기
+  const container = document.getElementById('messagesContainer');
+  container.innerHTML = '';
+  loadMessages(roomId).forEach(msg => {
+    appendMessageToContainer(msg.text, msg.sender === myPeerId ? 'mine' : 'other');
+  });
+
   updateMemberListUI();
   updateOnlineStatus();
   showChat();
 }
 
-function renderMessages(roomId) {
-  const container = document.getElementById('messagesContainer');
-  container.innerHTML = '';
-  const msgs = loadMessages(roomId);
-  msgs.forEach(msg => appendMessage(msg.text, msg.sender === myPeerId ? 'mine' : 'other'));
-}
-
-// ==================== WebRTC 피어 관리 ====================
+// ==================== WebRTC ====================
 async function createLocalOfferForRoom(roomId) {
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.services.mozilla.com:3478' }] });
   const dc = pc.createDataChannel('chat');
@@ -391,7 +384,6 @@ async function createLocalOfferForRoom(roomId) {
   await pc.setLocalDescription(offer);
   await waitForIce(pc);
   peers['local'] = { pc, dc };
-  // 연결 상태 감시
   monitorPeerConnection(pc, 'local');
 }
 
@@ -402,7 +394,7 @@ async function connectToPeer(offer, peerId) {
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   await waitForIce(pc);
-  peers[peerId] = { pc, dc: null }; // dc는 ondatachannel에서 설정
+  peers[peerId] = { pc, dc: null };
   monitorPeerConnection(pc, peerId);
 }
 
@@ -411,7 +403,6 @@ function setupDataChannel(dc, peerId) {
     if (!connectedPeers.includes(peerId)) {
       connectedPeers.push(peerId);
       updateMemberListUI();
-      // 방 멤버 목록에도 반영
       const room = rooms.find(r => r.id === activeRoomId);
       if (room && !room.members.includes(peerId)) {
         room.members.push(peerId);
@@ -426,7 +417,7 @@ function setupDataChannel(dc, peerId) {
     updateMemberListUI();
     updateOnlineStatus();
   };
-  if (peerId in peers) peers[peerId].dc = dc;
+  if (peers[peerId]) peers[peerId].dc = dc;
 }
 
 function monitorPeerConnection(pc, peerId) {
@@ -439,38 +430,32 @@ function monitorPeerConnection(pc, peerId) {
   };
 }
 
-// ==================== 메시지 송수신 ====================
+// ==================== 메시지 ====================
 async function sendMessage() {
   const input = document.getElementById('msgInput');
   const text = input.value.trim();
   if (!text || !sharedKey) return;
 
   const encrypted = await encrypt(text);
-  // 모든 활성 피어에게 전송
   Object.values(peers).forEach(({ dc }) => {
-    if (dc && dc.readyState === 'open') {
-      dc.send(JSON.stringify({ type: 'msg', ...encrypted }));
-    }
+    if (dc && dc.readyState === 'open') dc.send(JSON.stringify({ type: 'msg', ...encrypted }));
   });
 
-  // 내 메시지 표시 및 저장
-  appendMessage(text, 'mine');
+  appendMessageToContainer(text, 'mine');
   saveLocalMessage(text, myPeerId);
   input.value = '';
 }
 
 function handleMessage(data, peerId) {
-  if (typeof data === 'string') {
-    try {
-      const obj = JSON.parse(data);
-      if (obj.type === 'msg') {
-        decrypt(obj).then(plain => {
-          appendMessage(plain, 'other');
-          saveLocalMessage(plain, peerId);
-        });
-      }
-    } catch (e) {}
-  }
+  try {
+    const obj = JSON.parse(data);
+    if (obj.type === 'msg') {
+      decrypt(obj).then(plain => {
+        appendMessageToContainer(plain, 'other');
+        saveLocalMessage(plain, peerId);
+      });
+    }
+  } catch (e) {}
 }
 
 function saveLocalMessage(text, senderId) {
@@ -480,7 +465,7 @@ function saveLocalMessage(text, senderId) {
   saveMessages(activeRoomId, msgs);
 }
 
-function appendMessage(text, type) {
+function appendMessageToContainer(text, type) {
   const container = document.getElementById('messagesContainer');
   const div = document.createElement('div');
   div.className = `msg ${type}`;
@@ -501,13 +486,11 @@ async function deriveKey(password) {
     ['encrypt', 'decrypt']
   );
 }
-
 async function encrypt(plaintext) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sharedKey, new TextEncoder().encode(plaintext));
   return { iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)) };
 }
-
 async function decrypt(data) {
   const iv = new Uint8Array(data.iv);
   const ct = new Uint8Array(data.ct);
@@ -515,17 +498,15 @@ async function decrypt(data) {
   return new TextDecoder().decode(buf);
 }
 
-// ==================== 초대 ====================
+// ==================== 초대 / 나가기 ====================
 async function inviteToCurrentRoom() {
   if (!activeRoomId) return;
-  // 내 로컬 Offer 생성
   await createLocalOfferForRoom(activeRoomId);
   const offer = peers['local'].pc.localDescription;
   const link = `${location.origin}${location.pathname}#join=${activeRoomId}&offer=${btoa(JSON.stringify(offer))}`;
   prompt('초대 링크를 복사하세요:', link);
 }
 
-// ==================== 나가기 ====================
 function leaveCurrentRoom() {
   closeAllPeers();
   activeRoomId = null;
@@ -539,7 +520,7 @@ function closeAllPeers() {
   connectedPeers = [];
 }
 
-// ==================== UI 헬퍼 ====================
+// ==================== UI 갱신 ====================
 function updateMemberListUI() {
   const list = document.getElementById('memberList');
   const room = rooms.find(r => r.id === activeRoomId);
@@ -570,7 +551,7 @@ function exportAllData() {
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `p2p-chat-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `p2p-backup-${new Date().toISOString().slice(0,10)}.json`;
   a.click();
 }
 
@@ -585,42 +566,29 @@ async function importAllData(event) {
     data.forEach(room => {
       const existing = rooms.find(r => r.id === room.id);
       if (existing) {
-        existing.name = room.name;
-        existing.password = room.password;
-        existing.type = room.type;
-        existing.members = [...new Set([...existing.members, ...room.members])];
+        Object.assign(existing, room);
         if (room.messages) saveMessages(room.id, room.messages);
       } else {
-        rooms.push({
-          id: room.id, name: room.name, type: room.type,
-          password: room.password, createdAt: room.createdAt,
-          members: room.members
-        });
+        rooms.push(room);
         if (room.messages) saveMessages(room.id, room.messages);
       }
     });
     saveRooms();
     renderRoomList();
     alert('복원 완료!');
-  } catch (e) {
-    alert('올바른 백업 파일이 아닙니다.');
-  }
+  } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
   event.target.value = '';
 }
 
-// ==================== URL 해시 처리 ====================
+// ==================== 해시 처리 ====================
 function handleHash() {
   const hash = window.location.hash.substring(1);
   if (!hash) return;
   const params = new URLSearchParams(hash);
   if (params.has('join') && params.has('offer')) {
-    // 자동 참가 모드
     const offerBase64 = params.get('offer');
-    document.getElementById('joinOfferCode').value = ''; // 코드 필드는 비움
-    document.getElementById('joinPassword').focus();
+    document.getElementById('joinOfferCode').value = atob(offerBase64); // 자동 입력
     showJoinRoom();
-    // offer 미리 저장
-    window._pendingOffer = JSON.parse(atob(offerBase64));
   }
 }
 
