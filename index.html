@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>P2P 메신저 – 안정적 연결</title>
+  <title>P2P 메신저 – 암호화 핸드셰이크 수정판</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -162,7 +162,7 @@
 </div>
 <script>
 // ---------------- 전역 변수 ----------------
-const ID_STORAGE_KEY = 'p2p_identity_stable';
+const ID_STORAGE_KEY = 'p2p_identity_fixed';
 const CHUNK_SIZE = 16 * 1024;
 let idKeyPair, idPubJwkStr;
 let ephemeralKeyPair, peerEphemeralPubKey;
@@ -172,7 +172,7 @@ let pc, dc;
 let isOfferer = false;
 let pendingFileBuffers = {};
 let handshakeDone = false;
-let isChatScreenActive = false; // ★ 채팅 화면 활성화 여부
+let isChatScreenActive = false;
 
 // ---------------- 서버 목록 (150+) ----------------
 const GLOBAL_SERVERS = [
@@ -302,21 +302,33 @@ function initPeerConnection(){
   pc.oniceconnectionstatechange = () => {
     const state = pc.iceConnectionState;
     updateConnectionStatus(state);
-    // 채팅 화면이 활성화된 상태에서 끊기면 메인 화면으로 돌아가기
     if (isChatScreenActive && (state === 'disconnected' || state === 'failed')) {
       alert('연결이 끊어졌습니다.');
       showWelcomeScreen();
     }
-    // 채팅 화면이 아닐 때는 그냥 상태만 표시하고 유지
   };
-  pc.ondatachannel = (event) => { dc = event.channel; setupDataChannel(); };
+  pc.ondatachannel = (event) => {
+    dc = event.channel;
+    setupDataChannel();
+    // ★ 이미 데이터 채널이 열려 있으면 바로 핸드셰이크 시작
+    if (dc.readyState === 'open') {
+      startE2EEIfNeeded();
+    }
+  };
 }
 function setupDataChannel(){
-  dc.onopen = async () => {
+  dc.onopen = () => {
     updateConnectionStatus('connected');
-    // 데이터 채널이 열리면 바로 E2EE 핸드셰이크 시작 (채팅 화면은 나중에)
+    startE2EEIfNeeded();
   };
   dc.onmessage = handleIncomingMessage;
+}
+
+// ★ 데이터 채널이 열렸을 때 E2EE 시작 (중복 방지)
+function startE2EEIfNeeded() {
+  if (!handshakeDone && dc && dc.readyState === 'open') {
+    performE2EEHandshake();
+  }
 }
 
 async function createOfferAsHost(){
@@ -324,6 +336,10 @@ async function createOfferAsHost(){
   initPeerConnection();
   dc = pc.createDataChannel('chat',{ordered:true});
   setupDataChannel();
+  // 이미 open 상태일 수 있으므로 확인
+  if (dc.readyState === 'open') {
+    startE2EEIfNeeded();
+  }
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   await waitForIceComplete(pc);
@@ -398,8 +414,7 @@ async function processHandshake(data){
   sendingChainKey = await deriveChainKey(rootKey,'send');
   receivingChainKey = await deriveChainKey(rootKey,'recv');
   sendingIdx = 0; receivingIdx = 0;
-  if(!isOfferer) await performE2EEHandshake(); // answerer도 자신의 키 전송
-  // ★ 양쪽 모두 암호화 키 완성 → 채팅 화면 열기
+  if(!isOfferer) await performE2EEHandshake(); // answerer 응답
   if(!handshakeDone){
     handshakeDone = true;
     showChatScreen();
@@ -494,7 +509,7 @@ async function sendTextMessage(){
   }catch(e){ alert('메시지 전송 오류: '+e.message); }
 }
 
-// 파일 전송
+// 파일 전송 (간략)
 async function handleFileSelect(event){ for(const file of event.target.files) await sendFile(file); event.target.value=''; }
 async function sendFile(file){
   if(!dc||dc.readyState!=='open'||!sendingChainKey) return;
