@@ -3,22 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>P2P 메신저 – 완전 작동판</title>
+  <title>P2P 메신저 – 안정적 연결</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       background: radial-gradient(circle at 50% 0%, #1a1f35, #0b0e14);
-      color: #e0e0e0;
-      display: flex; justify-content: center; align-items: center;
+      color: #e0e0e0; display: flex; justify-content: center; align-items: center;
       min-height: 100vh; margin: 0; padding: 20px;
     }
     .container {
       width: 100%; max-width: 800px; height: 90vh;
       background: rgba(20, 25, 40, 0.8); backdrop-filter: blur(25px);
-      -webkit-backdrop-filter: blur(25px);
-      border-radius: 32px; box-shadow: 0 30px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05);
+      -webkit-backdrop-filter: blur(25px); border-radius: 32px;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05);
       display: flex; flex-direction: column; overflow: hidden;
       border: 1px solid rgba(255,255,255,0.08);
     }
@@ -163,7 +162,7 @@
 </div>
 <script>
 // ---------------- 전역 변수 ----------------
-const ID_STORAGE_KEY = 'p2p_identity_final';
+const ID_STORAGE_KEY = 'p2p_identity_stable';
 const CHUNK_SIZE = 16 * 1024;
 let idKeyPair, idPubJwkStr;
 let ephemeralKeyPair, peerEphemeralPubKey;
@@ -172,7 +171,8 @@ let sendingIdx = 0, receivingIdx = 0;
 let pc, dc;
 let isOfferer = false;
 let pendingFileBuffers = {};
-let handshakeDone = false;  // ★ 암호화 준비 완료 플래그
+let handshakeDone = false;
+let isChatScreenActive = false; // ★ 채팅 화면 활성화 여부
 
 // ---------------- 서버 목록 (150+) ----------------
 const GLOBAL_SERVERS = [
@@ -240,7 +240,6 @@ async function importId(event){
   document.getElementById('idFpShort').textContent = '내 신원: '+idPubJwkStr;
 }
 
-// URL 해시 처리 (참가자 자동 Offer 입력)
 function handleURLHash(){
   const hash = window.location.hash;
   if(hash && hash.startsWith('#join=')){
@@ -303,19 +302,19 @@ function initPeerConnection(){
   pc.oniceconnectionstatechange = () => {
     const state = pc.iceConnectionState;
     updateConnectionStatus(state);
-    if(state==='connected'){
-      // 채팅 화면은 handshake 이후에 열리므로 여기서 열지 않음
-    }else if(state==='disconnected' || state==='failed'){
+    // 채팅 화면이 활성화된 상태에서 끊기면 메인 화면으로 돌아가기
+    if (isChatScreenActive && (state === 'disconnected' || state === 'failed')) {
       alert('연결이 끊어졌습니다.');
       showWelcomeScreen();
     }
+    // 채팅 화면이 아닐 때는 그냥 상태만 표시하고 유지
   };
   pc.ondatachannel = (event) => { dc = event.channel; setupDataChannel(); };
 }
 function setupDataChannel(){
   dc.onopen = async () => {
     updateConnectionStatus('connected');
-    // 암호화 핸드셰이크 시작 (채팅 화면은 나중에)
+    // 데이터 채널이 열리면 바로 E2EE 핸드셰이크 시작 (채팅 화면은 나중에)
   };
   dc.onmessage = handleIncomingMessage;
 }
@@ -400,7 +399,7 @@ async function processHandshake(data){
   receivingChainKey = await deriveChainKey(rootKey,'recv');
   sendingIdx = 0; receivingIdx = 0;
   if(!isOfferer) await performE2EEHandshake(); // answerer도 자신의 키 전송
-  // ★ 양쪽 모두 암호화 키 생성 완료 → 채팅 화면 오픈
+  // ★ 양쪽 모두 암호화 키 완성 → 채팅 화면 열기
   if(!handshakeDone){
     handshakeDone = true;
     showChatScreen();
@@ -444,11 +443,13 @@ async function decryptWithRatchet(data,forFile){ return ratchetDecrypt(data,forF
 
 // UI 표시
 function showWelcomeScreen(){
+  isChatScreenActive = false;
   document.getElementById('chatScreen').style.display='none';
   showArea('welcomeArea');
   updateConnectionStatus('disconnected');
 }
 function showChatScreen(){
+  isChatScreenActive = true;
   showArea(null);
   document.getElementById('welcomeArea').style.display='none';
   document.getElementById('chatScreen').style.display='flex';
@@ -457,6 +458,7 @@ function showChatScreen(){
 function updateConnectionStatus(state){
   const led=document.getElementById('connLed'), text=document.getElementById('connText');
   if(state==='connected'){ led.className='led on'; text.textContent='연결됨 (E2EE)'; }
+  else if(state==='new'||state==='checking'){ led.className='led off'; text.textContent='연결 중...'; }
   else { led.className='led off'; text.textContent='오프라인'; }
 }
 function addMessage(content,sender){
@@ -492,7 +494,7 @@ async function sendTextMessage(){
   }catch(e){ alert('메시지 전송 오류: '+e.message); }
 }
 
-// 파일 전송 (간략 유지)
+// 파일 전송
 async function handleFileSelect(event){ for(const file of event.target.files) await sendFile(file); event.target.value=''; }
 async function sendFile(file){
   if(!dc||dc.readyState!=='open'||!sendingChainKey) return;
