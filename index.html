@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>P2P 메신저 – 최종 완벽판</title>
+  <title>P2P 메신저 – 최종 수정판</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -162,7 +162,7 @@
 </div>
 <script>
 // ---------------- 전역 변수 ----------------
-const ID_STORAGE_KEY = 'p2p_identity_final';
+const ID_STORAGE_KEY = 'p2p_identity_fix2';
 const CHUNK_SIZE = 16 * 1024;
 let idKeyPair, idPubJwkStr;
 let ephemeralKeyPair, peerEphemeralPubKey;
@@ -383,7 +383,7 @@ function waitForIceComplete(connection){
   });
 }
 
-// ★ 수정된 E2EE + Ratchet (HKDF/AES-GCM 완벽 분리)
+// ★ 수정된 E2EE + Ratchet (방향별 키 분리)
 async function performE2EEHandshake(){
   ephemeralKeyPair = await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-521'},true,['deriveBits']);
   dc.send(JSON.stringify({type:'handshake',ephemeralPubKey: await crypto.subtle.exportKey('jwk',ephemeralKeyPair.publicKey)}));
@@ -396,18 +396,28 @@ async function handleIncomingMessage(event){
     if(data.type==='handshake') await processHandshake(data);
     else if(data.type==='text') addMessage(await decryptWithRatchet(data,false),'other');
     else if(data.type==='file-header') await handleFileHeader(data);
-  }catch(e){ console.error('msg err',e); }
+  }catch(e){
+    console.error('msg err',e);
+    addMessage('⚠️ 메시지 복호화 오류', 'other'); // 화면에 오류 표시
+  }
 }
 
 async function processHandshake(data){
   if(!data.ephemeralPubKey) return;
   peerEphemeralPubKey = await crypto.subtle.importKey('jwk',data.ephemeralPubKey,{name:'ECDH',namedCurve:'P-521'},false,[]);
   const sharedBits = await crypto.subtle.deriveBits({name:'ECDH',public:peerEphemeralPubKey},ephemeralKeyPair.privateKey,256);
-  // rootKey: HKDF
   rootKey = await crypto.subtle.importKey('raw',sharedBits,{name:'HKDF',hash:'SHA-512'},false,['deriveBits']);
-  // 체인키는 HKDF
-  sendingChainKey = await deriveChainKey(rootKey,'send');
-  receivingChainKey = await deriveChainKey(rootKey,'recv');
+
+  // 방향에 맞게 체인키 설정
+  if (isOfferer) {
+    // 방장: 보내는 키 = offerer-to-answerer, 받는 키 = answerer-to-offerer
+    sendingChainKey = await deriveChainKey(rootKey, 'offerer-to-answerer');
+    receivingChainKey = await deriveChainKey(rootKey, 'answerer-to-offerer');
+  } else {
+    // 참가자: 보내는 키 = answerer-to-offerer, 받는 키 = offerer-to-answerer
+    sendingChainKey = await deriveChainKey(rootKey, 'answerer-to-offerer');
+    receivingChainKey = await deriveChainKey(rootKey, 'offerer-to-answerer');
+  }
   sendingIdx = 0; receivingIdx = 0;
   if(!isOfferer) await performE2EEHandshake();
   if(!handshakeDone){
@@ -418,7 +428,7 @@ async function processHandshake(data){
 
 async function deriveChainKey(parentKey,info){
   const bits = await crypto.subtle.deriveBits(
-    {name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info:new TextEncoder().encode(`p2p-chain-${info}`)},
+    {name:'HKDF',hash:'SHA-512',salt:new Uint8Array(0),info:new TextEncoder().encode(info)},
     parentKey, 256
   );
   return crypto.subtle.importKey('raw',bits,{name:'HKDF',hash:'SHA-512'},false,['deriveBits']);
