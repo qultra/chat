@@ -112,7 +112,6 @@
     </div>
   </div>
   <div class="main" id="mainArea">
-    <!-- 일반 모드 -->
     <div id="simpleMode">
       <div class="card text-center">
         <p class="text-sub mb">서버 없이 직접 연결되는<br>완전한 프라이버시 채팅</p>
@@ -120,8 +119,6 @@
         <button class="btn mt" onclick="joinChat()">📩 초대 코드 입력</button>
         <button class="btn mt" id="toggleAdvanced" onclick="toggleAdvanced()">⚙️ 고급 설정</button>
       </div>
-
-      <!-- 고급 설정 -->
       <div id="advancedSettings">
         <div class="card">
           <strong>🌐 연결 서버</strong>
@@ -133,8 +130,6 @@
           <p id="serverDesc" class="text-sub mt"></p>
         </div>
       </div>
-
-      <!-- 새 채팅 (Offer) -->
       <div id="offerPanel" class="hidden">
         <div class="card text-center">
           <div class="spinner mb" id="offerSpinner"></div>
@@ -152,8 +147,6 @@
           </div>
         </div>
       </div>
-
-      <!-- 참가 (Answer) 자동 처리용 -->
       <div id="autoAnswerPanel" class="hidden">
         <div class="card text-center">
           <div class="spinner mb" id="answerSpinner"></div>
@@ -170,8 +163,6 @@
           <p class="text-sub mt">상대방이 이 링크를 열면<br>자동으로 연결됩니다.</p>
         </div>
       </div>
-
-      <!-- 수동 참가 -->
       <div id="manualJoinPanel" class="hidden">
         <div class="card">
           <strong>📥 초대 코드 붙여넣기</strong>
@@ -185,8 +176,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 채팅 화면 -->
     <div id="chatScreen">
       <div id="messages"></div>
       <div class="emoji-panel" id="emojiPanel"></div>
@@ -202,14 +191,14 @@
 </div>
 
 <script>
-const ID_KEY = 'p2p_id_v14';
+const ID_KEY = 'p2p_id_v15';
 let idPair;
 let ephemeralPair, peerEphemeralPub;
-let rootKey, sendCK, recvCK;
+let rootKey;
+let sendCK, recvCK;   // now HKDF keys
 let sendIdx = 0, recvIdx = 0;
 let pc, dc, isOfferer = false;
 let pendingFiles = {};
-let handshakeComplete = false; // 추가: 암호화 준비 상태
 
 const PRIVACY = [
   'stun:stun.services.mozilla.com:3478','stun:stun.nextcloud.com:443',
@@ -244,7 +233,6 @@ function getIceServers() {
   });
 }
 
-// 초기화
 (async function init(){
   const stored = localStorage.getItem(ID_KEY);
   if (stored) idPair = await crypto.subtle.importKey('jwk', JSON.parse(stored), { name: 'ECDH', namedCurve: 'P-521' }, false, ['deriveBits']);
@@ -275,7 +263,6 @@ function closeConnection() {
   if (pc) { pc.close(); pc = null; }
   dc = null;
   sendCK = null; recvCK = null;
-  handshakeComplete = false;
 }
 
 async function checkHash() {
@@ -291,11 +278,8 @@ async function checkHash() {
   } else if (params.has('answer')) {
     try {
       const answer = JSON.parse(atob(params.get('answer')));
-      if (pc && isOfferer) {
-        await pc.setRemoteDescription(answer);
-      } else {
-        alert('채팅을 먼저 시작한 후 Answer 링크를 열거나, 아래 입력창에 붙여넣으세요.');
-      }
+      if (pc && isOfferer) await pc.setRemoteDescription(answer);
+      else alert('채팅을 먼저 시작한 후 Answer 링크를 열거나, 아래 입력창에 붙여넣으세요.');
     } catch (e) { alert('잘못된 Answer 링크입니다.'); }
   }
 }
@@ -306,13 +290,11 @@ async function autoAnswer(offer) {
   document.getElementById('autoAnswerPanel').classList.remove('hidden');
   document.getElementById('answerSpinner').style.display = 'inline-block';
   document.getElementById('answerReadyPanel').classList.add('hidden');
-
   initPC();
   await pc.setRemoteDescription(offer);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   await waitIce();
-
   const answerUrl = window.location.origin + window.location.pathname + '#answer=' + btoa(JSON.stringify(pc.localDescription));
   document.getElementById('answerLinkDisplay').textContent = answerUrl;
   document.getElementById('answerSpinner').style.display = 'none';
@@ -363,65 +345,47 @@ async function applyAnswerLink() {
   const params = new URLSearchParams(hash);
   if (params.has('answer')) {
     const answer = JSON.parse(atob(params.get('answer')));
-    if (pc && isOfferer) {
-      await pc.setRemoteDescription(answer);
-    } else {
-      alert('채팅을 시작한 후 Answer 링크를 적용하세요.');
-    }
-  } else {
-    alert('올바른 Answer 링크가 아닙니다.');
-  }
+    if (pc && isOfferer) await pc.setRemoteDescription(answer);
+    else alert('채팅을 시작한 후 Answer 링크를 적용하세요.');
+  } else alert('올바른 Answer 링크가 아닙니다.');
 }
 
 function initPC() {
   pc = new RTCPeerConnection({ iceServers: getIceServers(), iceCandidatePoolSize: 2 });
   pc.oniceconnectionstatechange = onIceState;
-  pc.ondatachannel = (event) => {
-    dc = event.channel;
-    setupDC();
-  };
+  pc.ondatachannel = (event) => { dc = event.channel; setupDC(); };
 }
 
 function setupDC() {
   if (!dc) return;
   dc.onopen = async () => {
     updateConn(true);
-    try {
-      await handshake();
-    } catch (e) {
+    try { await handshake(); } catch (e) {
       console.error('핸드셰이크 실패:', e);
-      addMsg('⚠️ 암호화 연결에 실패했습니다. 페이지를 새로고침하세요.', 'system');
+      addMsg('⚠️ 암호화 연결에 실패했습니다.', 'system');
       return;
     }
     showChat();
   };
   dc.onmessage = onMsg;
-  dc.onclose = () => {
-    updateConn(false);
-    handshakeComplete = false;
-  };
-  dc.onerror = (e) => console.error('데이터 채널 오류:', e);
+  dc.onclose = () => updateConn(false);
+  dc.onerror = e => console.error('데이터 채널 오류:', e);
 }
 
 function onIceState() {
   const state = pc.iceConnectionState;
   if (state === 'connected') updateConn(true);
-  else if (state === 'disconnected' || state === 'failed') {
-    updateConn(false);
-    showSimple();
-  }
+  else if (state === 'disconnected' || state === 'failed') { updateConn(false); showSimple(); }
 }
 
 function waitIce() {
   return new Promise(r => {
     if (pc.iceGatheringState === 'complete') r();
-    else pc.addEventListener('icegatheringstatechange', () => {
-      if (pc.iceGatheringState === 'complete') r();
-    });
+    else pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') r(); });
   });
 }
 
-// ==================== E2EE ====================
+// ==================== E2EE (키 유형 수정) ====================
 async function handshake() {
   if (!dc || dc.readyState !== 'open') throw new Error('데이터 채널이 열리지 않음');
   ephemeralPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-521' }, true, ['deriveBits']);
@@ -432,10 +396,7 @@ async function onMsg(e) {
   try {
     if (e.data instanceof ArrayBuffer) { handleBinary(e.data); return; }
     const d = JSON.parse(e.data);
-    if (d.type === 'hs') {
-      await processHS(d);
-      handshakeComplete = true;
-    }
+    if (d.type === 'hs') await processHS(d);
     else if (d.type === 'text') addMsg(await ratchetDecrypt(d), 'other');
     else if (d.type === 'file-header') await handleFileHeader(d);
   } catch (err) {
@@ -454,40 +415,58 @@ async function processHS(d) {
   if (!isOfferer) await handshake();
 }
 
-async function deriveCK(k, i) {
+// 이제 체인 키는 HKDF 키로 반환
+async function deriveCK(parentKey, info) {
   return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-512', salt: new Uint8Array(0), info: new TextEncoder().encode(i) },
-    k, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    { name: 'HKDF', hash: 'SHA-512', salt: new Uint8Array(0), info: new TextEncoder().encode(info) },
+    parentKey,
+    { name: 'HKDF', hash: 'SHA-512' },   // derive as HKDF key
+    false,
+    ['deriveKey', 'deriveBits']
   );
 }
 
-async function ratchetEncrypt(t) {
-  const mk = await msgKey(sendCK, sendIdx);
+async function ratchetEncrypt(plaintext) {
+  const mk = await deriveMessageKey(sendCK, sendIdx);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, mk, new TextEncoder().encode(t));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, mk, new TextEncoder().encode(plaintext));
   sendCK = await advanceCK(sendCK);
   sendIdx++;
   return { iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)), idx: sendIdx - 1 };
 }
 
-async function ratchetDecrypt(d, f = false) {
-  let i = d.idx;
-  while (recvIdx < i) { recvCK = await advanceCK(recvCK); recvIdx++; }
-  const mk = await msgKey(recvCK, i);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(d.iv) }, mk, new Uint8Array(d.ct));
+async function ratchetDecrypt(data, forFile = false) {
+  let idx = data.idx;
+  while (recvIdx < idx) { recvCK = await advanceCK(recvCK); recvIdx++; }
+  const mk = await deriveMessageKey(recvCK, idx);
+  const iv = new Uint8Array(data.iv);
+  const ct = new Uint8Array(data.ct);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, mk, ct);
   recvCK = await advanceCK(recvCK);
   recvIdx++;
-  return f ? plain : new TextDecoder().decode(plain);
+  return forFile ? plain : new TextDecoder().decode(plain);
 }
 
-async function msgKey(ck, i) {
-  const b = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-512', salt: new Uint8Array(0), info: new TextEncoder().encode(`m${i}`) }, ck, 256);
-  return crypto.subtle.importKey('raw', b, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+// 체인 키에서 메시지 키 유도 (AES-GCM)
+async function deriveMessageKey(chainKey, index) {
+  const info = new TextEncoder().encode(`msg-${index}`);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-512', salt: new Uint8Array(0), info },
+    chainKey,
+    256
+  );
+  return crypto.subtle.importKey('raw', bits, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
-async function advanceCK(ck) {
-  const b = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-512', salt: new Uint8Array(0), info: new TextEncoder().encode('a') }, ck, 256);
-  return crypto.subtle.importKey('raw', b, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+// 체인 키 진행 (HKDF -> HKDF)
+async function advanceCK(chainKey) {
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-512', salt: new Uint8Array(0), info: new TextEncoder().encode('adv') },
+    chainKey,
+    { name: 'HKDF', hash: 'SHA-512' },
+    false,
+    ['deriveKey', 'deriveBits']
+  );
 }
 
 // ==================== UI ====================
@@ -505,22 +484,18 @@ function updateConn(ok) {
   lbl.textContent = ok ? '연결됨' : '오프라인';
 }
 
-// ==================== 전송 (핵심 수정) ====================
 async function sendText() {
   const inp = document.getElementById('msgInput');
   const t = inp.value.trim();
   if (!t) return;
-
-  // 연결 상태 검사
   if (!dc || dc.readyState !== 'open') {
-    addMsg('⏳ 아직 연결이 준비되지 않았습니다. 잠시 후 다시 시도하세요.', 'system');
+    addMsg('⏳ 아직 연결이 준비되지 않았습니다.', 'system');
     return;
   }
   if (!sendCK) {
-    addMsg('🔐 암호화 키 생성 중... 잠시만 기다려주세요.', 'system');
+    addMsg('🔐 암호화 키 생성 중...', 'system');
     return;
   }
-
   try {
     const enc = await ratchetEncrypt(t);
     dc.send(JSON.stringify({ type: 'text', ...enc }));
@@ -528,7 +503,7 @@ async function sendText() {
     inp.value = '';
   } catch (e) {
     console.error('전송 오류:', e);
-    addMsg('❌ 메시지 전송에 실패했습니다.', 'system');
+    addMsg(`❌ 전송 실패: ${e.message}`, 'system');
   }
 }
 
@@ -536,11 +511,16 @@ function addMsg(t, who) {
   const c = document.getElementById('messages');
   const d = document.createElement('div');
   d.className = 'msg ' + (who === 'me' ? 'me' : (who === 'other' ? 'other' : ''));
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
   if (who === 'system') {
-    d.innerHTML = `<div class="bubble" style="background: rgba(255,255,255,0.05); border-color: var(--border);"><em>${escapeHtml(t)}</em></div>`;
+    bubble.style.background = 'rgba(255,255,255,0.05)';
+    bubble.style.border = '1px solid var(--border)';
+    bubble.innerHTML = `<em>${escapeHtml(t)}</em>`;
   } else {
-    d.innerHTML = `<div class="bubble">${escapeHtml(t)}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
+    bubble.innerHTML = `${escapeHtml(t)}<div class="time">${new Date().toLocaleTimeString()}</div>`;
   }
+  d.appendChild(bubble);
   c.appendChild(d);
   c.scrollTop = c.scrollHeight;
 }
@@ -563,7 +543,7 @@ async function sendFile(f) {
   }
 }
 async function ratchetEncryptBinary(buf) {
-  const mk = await msgKey(sendCK, sendIdx), iv = crypto.getRandomValues(new Uint8Array(12));
+  const mk = await deriveMessageKey(sendCK, sendIdx), iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, mk, buf);
   sendCK = await advanceCK(sendCK); sendIdx++;
   return { iv, ct: new Uint8Array(ct), idx: sendIdx - 1 };
@@ -577,9 +557,10 @@ async function handleBinary(ab) {
   const fb = pendingFiles[meta.fid]; fb.chunks[meta.ci] = new Uint8Array(plain); fb.got++;
   if (fb.total && fb.got === fb.total) assemble(meta.fid);
 }
-async function ratchetDecryptBinary(d) {
-  let i = d.idx; while (recvIdx < i) { recvCK = await advanceCK(recvCK); recvIdx++; }
-  const mk = await msgKey(recvCK, i), plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(d.iv) }, mk, new Uint8Array(d.ct));
+async function ratchetDecryptBinary(data) {
+  let idx = data.idx; while (recvIdx < idx) { recvCK = await advanceCK(recvCK); recvIdx++; }
+  const mk = await deriveMessageKey(recvCK, idx);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(data.iv) }, mk, new Uint8Array(data.ct));
   recvCK = await advanceCK(recvCK); recvIdx++; return plain;
 }
 async function handleFileHeader(d) {
@@ -599,7 +580,6 @@ function assemble(id) {
   delete pendingFiles[id];
 }
 
-// ==================== 이모지 ====================
 const EMOJIS = ['😀','😂','😍','🥰','😎','🤔','👍','❤️','🔥','🎉','✨','🌟','💯','😢','😡','🥳','🤗','😴','🍕','☕','🌈','🎵','📸','💻','📱','🔒','🔑','💬','📎','📁','✅','❌'];
 function buildEmojiPanel() {
   const p = document.getElementById('emojiPanel');
@@ -622,8 +602,8 @@ function copyTextById(id) {
 }
 function shareAnswerLink() {
   const link = document.getElementById('answerLinkDisplay').textContent;
-  if (navigator.share) { navigator.share({ title: 'P2P 채팅 Answer', url: link }).catch(() => {}); }
-  else { copyTextById('answerLinkDisplay'); }
+  if (navigator.share) navigator.share({ title: 'P2P 채팅 Answer', url: link }).catch(() => {});
+  else copyTextById('answerLinkDisplay');
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
 </script>
