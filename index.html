@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>P2P 완전판 – 연락처, 그룹, 오픈채팅</title>
+  <title>P2P 암호 채팅 – 한 줄 암호</title>
   <style>
     :root {
       --bg: #0b0e14; --surface: #141a24; --card: rgba(20,26,36,0.8);
       --text: #e2e8f0; --sub: #94a3b8; --accent: #5b8def; --danger: #f87171;
-      --border: #1e293b; --radius: 18px; --radius-sm: 12px;
+      --border: #1e293b; --radius: 20px; --radius-sm: 14px;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
@@ -18,14 +18,14 @@
       min-height: 100dvh; padding: 10px;
     }
     .container {
-      width: 100%; max-width: 550px; height: 95dvh;
-      background: var(--surface); border-radius: 28px;
+      width: 100%; max-width: 500px; height: 95dvh;
+      background: var(--surface); border-radius: 32px;
       box-shadow: 0 25px 60px rgba(0,0,0,0.6);
       display: flex; flex-direction: column; overflow: hidden;
       border: 1px solid var(--border);
     }
     .header {
-      padding: 14px 20px; background: rgba(15,23,33,0.8);
+      padding: 16px 20px; background: rgba(15,23,33,0.8);
       backdrop-filter: blur(20px); border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
     }
@@ -34,128 +34,150 @@
     .dot { width: 10px; height: 10px; border-radius: 50%; }
     .dot.on { background: #4ade80; } .dot.off { background: #f87171; }
 
-    .main { flex:1; overflow-y:auto; padding: 14px; display:flex; flex-direction:column; }
+    .main { flex:1; overflow-y:auto; padding: 16px; display:flex; flex-direction:column; }
     .main::-webkit-scrollbar { width:4px; } .main::-webkit-scrollbar-thumb { background:#334155; border-radius:2px; }
 
     .card {
       background: var(--card); backdrop-filter: blur(12px);
-      border-radius: var(--radius); padding: 16px; margin-bottom: 10px;
+      border-radius: var(--radius); padding: 18px; margin-bottom: 12px;
       border: 1px solid var(--border);
     }
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       background: rgba(255,255,255,0.06); color: white; border: 1px solid var(--border);
-      padding: 10px 16px; border-radius: var(--radius-sm); cursor: pointer;
-      font-weight: 600; font-size: 0.95rem; transition: all 0.2s;
+      padding: 12px 20px; border-radius: var(--radius-sm); cursor: pointer;
+      font-weight: 600; font-size: 1rem; transition: all 0.2s; width: 100%;
       text-align: center; backdrop-filter: blur(10px);
     }
     .btn:hover { background: rgba(255,255,255,0.12); }
     .btn.primary { background: var(--accent); border:none; }
-    .btn.small { padding: 6px 12px; font-size: 0.8rem; width: auto; }
-    .btn-group { display: flex; gap: 6px; }
+    .btn-group { display: flex; gap: 8px; }
+    .btn-group .btn { flex:1; }
 
     input[type=text], input[type=password], textarea {
       width: 100%; background: #0f131c; color: var(--text);
       border: 1px solid var(--border); border-radius: var(--radius-sm);
-      padding: 10px 14px; font-size: 0.95rem; outline: none;
+      padding: 12px 16px; font-size: 1rem; outline: none;
     }
     input:focus, textarea:focus { border-color: var(--accent); }
 
     #chatScreen { display: none; flex-direction: column; flex:1; }
     #messages {
-      flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px;
+      flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;
       padding: 4px 0;
     }
     .msg { display: flex; }
     .msg.me { justify-content: flex-end; }
     .bubble {
-      max-width: 80%; padding: 8px 14px; border-radius: 18px;
+      max-width: 80%; padding: 10px 16px; border-radius: 20px;
       background: rgba(30,38,53,0.8); backdrop-filter: blur(8px);
       border: 1px solid rgba(255,255,255,0.05);
       animation: fadeUp 0.2s ease;
     }
-    .msg.me .bubble { background: linear-gradient(135deg,rgba(59,130,246,0.4),rgba(139,92,246,0.4)); border-bottom-right-radius:4px; }
-    .msg.other .bubble { border-bottom-left-radius:4px; }
-    .time { font-size: 0.6rem; color: var(--sub); margin-top: 2px; text-align: right; }
-    .file-inline img { max-width: 160px; max-height: 100px; border-radius: 10px; }
-    .input-bar { display: flex; gap: 6px; padding: 10px 0 0; }
+    .msg.me .bubble { background: linear-gradient(135deg,rgba(59,130,246,0.4),rgba(139,92,246,0.4)); border-bottom-right-radius:6px; }
+    .msg.other .bubble { border-bottom-left-radius:6px; }
+    .time { font-size: 0.65rem; color: var(--sub); margin-top: 4px; text-align: right; }
+    .file-inline { display: flex; align-items: center; gap: 8px; }
+    .file-inline img { max-width: 180px; max-height: 120px; border-radius: 12px; }
+    .input-bar { display: flex; gap: 8px; padding: 12px 0 0; }
     #msgInput { flex:1; }
-    .attach-btn { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--accent); }
+    .attach-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 4px; color: var(--accent); }
 
-    .room-list { display: flex; flex-direction: column; gap: 6px; }
-    .room-item {
-      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 10px 14px;
-      display: flex; justify-content: space-between; align-items: center;
-      cursor: pointer;
-    }
-    .room-item:hover { background: rgba(255,255,255,0.06); }
+    .spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
     .hidden { display: none !important; }
-    .text-sub { color: var(--sub); font-size: 0.8rem; }
+    .text-center { text-align: center; }
+    .text-sub { color: var(--sub); font-size: 0.85rem; }
     .mt { margin-top: 8px; }
     .mb { margin-bottom: 8px; }
-    .link-box { word-break: break-all; background: #0f131c; padding: 8px; border-radius: 10px; font-size: 0.7rem; margin: 6px 0; }
+
+    #advancedSettings { display: none; }
+    .link-box { word-break: break-all; background: #0f131c; padding: 12px; border-radius: 12px; font-size: 0.75rem; margin: 8px 0; }
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>✦ P2P 채팅</h1>
+    <h1>✦ P2P 암호 채팅</h1>
     <div class="status-dot">
       <span id="connDot" class="dot off"></span>
       <span id="connLabel">오프라인</span>
     </div>
   </div>
   <div class="main" id="mainArea">
-    <!-- 메인 메뉴: 채팅방 목록 -->
-    <div id="roomListPanel">
-      <div class="card">
-        <div class="btn-group">
-          <button class="btn primary" onclick="showCreateRoom()">✨ 새 채팅방</button>
-          <button class="btn" onclick="showJoinRoom()">📩 참가</button>
+    <!-- 초기 화면 -->
+    <div id="simpleMode">
+      <div class="card text-center">
+        <p class="text-sub mb">서버 없이 직접 연결되는<br>완전한 프라이버시 채팅</p>
+        <button class="btn primary" onclick="startNewChat()">✨ 새 채팅 시작</button>
+        <button class="btn mt" onclick="joinChat()">📩 초대 코드 입력</button>
+      </div>
+
+      <!-- Offer 패널 (방장) -->
+      <div id="offerPanel" class="hidden">
+        <div class="card">
+          <strong>🔐 채팅방 암호 설정</strong>
+          <input type="password" id="roomPassword" placeholder="암호 (상대와 공유하세요)" oninput="updateOfferLink()">
+          <p class="text-sub mt">이 암호를 상대방에게 알려주세요. (음성 통화 등 안전하게)</p>
+          <p class="text-sub">암호가 없으면 연결되지 않습니다.</p>
+        </div>
+        <div class="card text-center">
+          <div class="spinner mb" id="offerSpinner"></div>
+          <p><strong>연결 준비 중...</strong></p>
+          <p class="text-sub">아래 링크를 상대방에게 보내세요.</p>
+          <div class="link-box" id="offerLinkDisplay"></div>
+          <div class="btn-group mt">
+            <button class="btn" onclick="copyTextById('offerLinkDisplay')">📋 링크 복사</button>
+          </div>
+          <p class="text-sub mt">상대방이 Answer 링크를 보내면<br>아래에 붙여넣으세요</p>
+          <input type="text" id="answerLinkInput" placeholder="Answer 링크...">
+          <button class="btn primary mt" onclick="applyAnswerLink()">✅ 연결 완료</button>
         </div>
       </div>
-      <div id="savedRooms" class="room-list">
-        <!-- 저장된 채팅방 목록이 여기에 렌더링 -->
-      </div>
-    </div>
 
-    <!-- 채팅방 생성 화면 -->
-    <div id="createRoomPanel" class="hidden">
-      <div class="card">
-        <button class="btn small" onclick="showRoomList()">← 뒤로</button>
-        <input type="text" id="roomName" placeholder="채팅방 이름" class="mt">
-        <input type="password" id="roomPassword" placeholder="암호 (공유할 비밀번호)" class="mt">
-        <button class="btn primary mt" onclick="createRoom()">방 만들기</button>
-      </div>
-      <div id="createdRoomInfo" class="hidden card">
-        <p><strong>초대 링크</strong></p>
-        <div class="link-box" id="createdLink"></div>
-        <button class="btn mt" onclick="copyLink('createdLink')">📋 링크 복사</button>
-      </div>
-    </div>
-
-    <!-- 채팅방 참가 화면 -->
-    <div id="joinRoomPanel" class="hidden">
-      <div class="card">
-        <button class="btn small" onclick="showRoomList()">← 뒤로</button>
-        <input type="password" id="joinPassword" placeholder="암호 (방장에게 받은 비밀번호)" class="mt">
-        <textarea id="joinOfferSDP" placeholder="또는 초대 코드 붙여넣기" class="mt" rows="3"></textarea>
-        <button class="btn primary mt" onclick="joinRoom()">참가</button>
+      <!-- Answer 패널 (참가자) -->
+      <div id="answerPanel" class="hidden">
+        <div class="card">
+          <strong>🔐 채팅방 암호 입력</strong>
+          <input type="password" id="joinPassword" placeholder="방장이 알려준 암호">
+          <p class="text-sub mt">초대 링크를 이미 열었다면 암호만 입력하세요.</p>
+        </div>
+        <div id="autoAnswerContent" class="hidden">
+          <div class="card text-center">
+            <div class="spinner mb" id="answerSpinner"></div>
+            <p><strong>초대 링크 확인 중...</strong></p>
+          </div>
+          <div id="answerReadyPanel" class="hidden card text-center">
+            <p><strong>✅ 연결 준비 완료!</strong></p>
+            <p class="text-sub">아래 링크를 방장에게 돌려보내세요.</p>
+            <div class="link-box" id="answerLinkDisplay"></div>
+            <button class="btn mt" onclick="copyTextById('answerLinkDisplay')">📋 링크 복사</button>
+          </div>
+        </div>
+        <div id="manualJoinContent">
+          <div class="card mt">
+            <strong>📥 초대 코드 붙여넣기</strong>
+            <textarea id="remoteOfferSDP" rows="3" placeholder="방장에게 받은 초대 코드..."></textarea>
+            <button class="btn primary mt" onclick="createAnswerFromOffer()">🔄 Answer 생성</button>
+          </div>
+          <div id="answerResultPanel" class="hidden card mt">
+            <strong>📤 내 Answer 코드</strong>
+            <textarea id="localAnswerSDP" readonly rows="3"></textarea>
+            <button class="btn mt" onclick="copyText('localAnswerSDP')">📋 복사해서 방장에게 전송</button>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- 채팅 화면 -->
     <div id="chatScreen">
-      <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0;">
-        <span id="currentRoomName" style="font-weight:600;"></span>
-        <button class="btn small" onclick="leaveRoom()">나가기</button>
-      </div>
       <div id="messages"></div>
       <div class="input-bar">
         <button class="attach-btn" onclick="document.getElementById('fileInput').click()">📎</button>
-        <input type="text" id="msgInput" placeholder="메시지..." autocomplete="off">
-        <button class="btn primary small" onclick="sendText()">전송</button>
+        <input type="text" id="msgInput" placeholder="메시지 (암호화됨)" autocomplete="off">
+        <button class="btn primary" style="width:auto; padding:10px 16px;" onclick="sendText()">전송</button>
       </div>
       <input type="file" id="fileInput" class="hidden" multiple onchange="handleFiles(this.files)">
     </div>
@@ -163,175 +185,279 @@
 </div>
 
 <script>
-// ==================== 데이터 관리 ====================
-const ROOMS_KEY = 'p2p_rooms_v1';
-let rooms = JSON.parse(localStorage.getItem(ROOMS_KEY) || '[]');
-let currentRoomId = null;
-let currentPassword = '';
-let sharedKey = null;
+// ==================== 전역 변수 ====================
+let sharedKey = null;           // AES-GCM CryptoKey
 let pc, dc, isOfferer = false;
-let myPeerId = 'peer-' + Math.random().toString(36).substr(2,9);
+let pendingFiles = {};
+let password = ''; // Offerer가 설정한 암호 저장
 
-function saveRooms() { localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms)); }
+const PRIVACY_SERVERS = [
+  'stun:stun.services.mozilla.com:3478','stun:stun.nextcloud.com:443',
+  'stun:stun.linphone.org:3478','stun:stun.freeswitch.org:3478',
+  'stun:stun.ekiga.net:3478','stun:stun.viagenie.ca:3478','stun:stun.iptel.org:3478'
+];
 
-// ==================== 화면 전환 ====================
-function showRoomList() {
-  hideAllPanels();
-  document.getElementById('roomListPanel').classList.remove('hidden');
-  renderRoomList();
-}
-function showCreateRoom() {
-  hideAllPanels();
-  document.getElementById('createRoomPanel').classList.remove('hidden');
-}
-function showJoinRoom() {
-  hideAllPanels();
-  document.getElementById('joinRoomPanel').classList.remove('hidden');
-}
-function showChatScreen(roomId) {
-  hideAllPanels();
-  currentRoomId = roomId;
-  document.getElementById('chatScreen').style.display = 'flex';
-  const room = rooms.find(r => r.id === roomId);
-  document.getElementById('currentRoomName').textContent = room ? room.name : '채팅';
-  document.getElementById('messages').innerHTML = '';
-}
-function hideAllPanels() {
-  document.getElementById('roomListPanel').classList.add('hidden');
-  document.getElementById('createRoomPanel').classList.add('hidden');
-  document.getElementById('joinRoomPanel').classList.add('hidden');
-  document.getElementById('chatScreen').style.display = 'none';
+function getIceServers() {
+  return PRIVACY_SERVERS.map(url => ({ urls: url }));
 }
 
-function renderRoomList() {
-  const container = document.getElementById('savedRooms');
-  container.innerHTML = rooms.length === 0 ? '<p class="text-sub">아직 채팅방이 없습니다.</p>' : '';
-  rooms.forEach(room => {
-    const div = document.createElement('div');
-    div.className = 'room-item';
-    div.innerHTML = `<span>${escapeHtml(room.name)} (${room.type})</span>`;
-    div.onclick = () => enterRoom(room.id);
-    container.appendChild(div);
-  });
-}
+// ==================== 초기화 ====================
+(async function init(){
+  document.getElementById('msgInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendText(); });
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', async e => { e.preventDefault(); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
+  checkHash();
+  window.addEventListener('hashchange', checkHash);
+})();
 
-// ==================== 채팅방 생성 ====================
-async function createRoom() {
-  const name = document.getElementById('roomName').value.trim() || '채팅방';
-  const password = document.getElementById('roomPassword').value;
-  if (!password) return alert('암호를 입력하세요.');
-  
-  const room = {
-    id: crypto.randomUUID(),
-    name,
-    password,
-    type: '1:1', // 기본
-    createdAt: Date.now()
-  };
-  rooms.push(room);
-  saveRooms();
-  currentPassword = password;
-  await deriveSharedKey(password);
-  
-  // WebRTC Offer 생성
-  isOfferer = true;
-  initPC();
-  dc = pc.createDataChannel('chat', { ordered: true });
-  setupDC();
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await waitIce();
-  
-  const offerBase64 = btoa(JSON.stringify(pc.localDescription));
-  const link = window.location.origin + window.location.pathname + '#room=' + room.id + '&offer=' + offerBase64;
-  document.getElementById('createdLink').textContent = link;
-  document.getElementById('createdRoomInfo').classList.remove('hidden');
-  
-  // 연결 성공 시 채팅방 입장
-  currentRoomId = room.id;
-}
+// ==================== 해시 처리 (원클릭) ====================
+async function checkHash() {
+  const hash = window.location.hash.substring(1);
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  if (params.has('offer')) {
+    try {
+      const offer = JSON.parse(atob(params.get('offer')));
+      closeConnection();
+      // Offerer가 설정한 암호가 URL에 포함되었는지 (선택적)
+      if (params.has('pw')) password = params.get('pw');
+      // 자동 Answer 모드 UI
+      document.getElementById('simpleMode').querySelector('.card').classList.add('hidden');
+      document.getElementById('answerPanel').classList.remove('hidden');
+      document.getElementById('autoAnswerContent').classList.remove('hidden');
+      document.getElementById('manualJoinContent').classList.add('hidden');
+      document.getElementById('answerSpinner').style.display = 'inline-block';
+      document.getElementById('answerReadyPanel').classList.add('hidden');
 
-async function enterRoom(roomId) {
-  const room = rooms.find(r => r.id === roomId);
-  if (!room) return;
-  currentPassword = room.password;
-  await deriveSharedKey(room.password);
-  showChatScreen(roomId);
-}
-
-async function joinRoom() {
-  const password = document.getElementById('joinPassword').value;
-  const offerStr = document.getElementById('joinOfferSDP').value.trim();
-  
-  if (!password) return alert('암호를 입력하세요.');
-  let offer;
-  if (offerStr) {
-    try { offer = JSON.parse(offerStr); } catch(e) { return alert('올바르지 않은 초대 코드입니다.'); }
-  } else {
-    // URL에서 추출 시도
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    if (params.has('offer')) {
-      try { offer = JSON.parse(atob(params.get('offer'))); } catch(e) { return alert('링크가 올바르지 않습니다.'); }
-    } else return alert('초대 코드를 붙여넣거나 초대 링크를 여세요.');
+      // 암호 입력 창 보여주기
+      // (joinPassword 입력 대기 필요 -> 자동 진행은 안 함, 사용자가 직접 입력)
+      // 대신 offer만 setRemote
+      await initiateAnswer(offer);
+    } catch (e) { alert('잘못된 초대 링크입니다.'); }
+  } else if (params.has('answer')) {
+    try {
+      const answer = JSON.parse(atob(params.get('answer')));
+      if (pc && isOfferer) {
+        await pc.setRemoteDescription(answer);
+      } else alert('채팅을 먼저 시작한 후 Answer 링크를 열거나, 아래 입력창에 붙여넣으세요.');
+    } catch (e) { alert('잘못된 Answer 링크입니다.'); }
   }
-  
-  currentPassword = password;
-  await deriveSharedKey(password);
+}
+
+async function initiateAnswer(offer) {
   isOfferer = false;
   initPC();
   await pc.setRemoteDescription(offer);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   await waitIce();
-  
-  // 방 목록에 추가
-  const room = {
-    id: crypto.randomUUID(),
-    name: '참가한 채팅방',
-    password,
-    type: '1:1',
-    createdAt: Date.now()
-  };
-  rooms.push(room);
-  saveRooms();
-  currentRoomId = room.id;
-  showChatScreen(room.id);
+  // 암호는 아직 없으므로, UI에서 암호 입력 후 키 생성
+  document.getElementById('answerSpinner').style.display = 'none';
+  document.getElementById('answerReadyPanel').classList.remove('hidden');
+  const answerUrl = window.location.origin + window.location.pathname + '#answer=' + btoa(JSON.stringify(pc.localDescription));
+  document.getElementById('answerLinkDisplay').textContent = answerUrl;
 }
 
-function leaveRoom() {
-  closeConnection();
-  currentRoomId = null;
-  showRoomList();
+// Offerer 쪽에서 암호 입력 시 링크 업데이트
+function updateOfferLink() {
+  password = document.getElementById('roomPassword').value;
+  if (pc && isOfferer) {
+    const offerBase64 = btoa(JSON.stringify(pc.localDescription));
+    let url = window.location.origin + window.location.pathname + '#offer=' + offerBase64;
+    if (password) url += '&pw=' + encodeURIComponent(password);
+    document.getElementById('offerLinkDisplay').textContent = url;
+  }
 }
+
+// ==================== 사용자 액션 ====================
+async function startNewChat() {
+  closeConnection();
+  isOfferer = true;
+  password = ''; // 초기화
+  document.getElementById('offerPanel').classList.remove('hidden');
+  document.getElementById('answerPanel').classList.add('hidden');
+  document.getElementById('offerSpinner').style.display = 'inline-block';
+  initPC();
+  dc = pc.createDataChannel('chat', { ordered: true });
+  setupDC();
+  pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => waitIce().then(() => {
+    document.getElementById('offerSpinner').style.display = 'none';
+    const offerBase64 = btoa(JSON.stringify(pc.localDescription));
+    let url = window.location.origin + window.location.pathname + '#offer=' + offerBase64;
+    // 암호가 있으면 추가
+    if (password) url += '&pw=' + encodeURIComponent(password);
+    document.getElementById('offerLinkDisplay').textContent = url;
+  }));
+}
+
+function joinChat() {
+  document.getElementById('offerPanel').classList.add('hidden');
+  document.getElementById('answerPanel').classList.remove('hidden');
+  document.getElementById('autoAnswerContent').classList.add('hidden');
+  document.getElementById('manualJoinContent').classList.remove('hidden');
+}
+
+async function createAnswerFromOffer() {
+  const offerStr = document.getElementById('remoteOfferSDP').value.trim();
+  if (!offerStr) return;
+  closeConnection();
+  isOfferer = false;
+  initPC();
+  await pc.setRemoteDescription(JSON.parse(offerStr));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await waitIce();
+  document.getElementById('localAnswerSDP').value = JSON.stringify(pc.localDescription);
+  document.getElementById('answerResultPanel').classList.remove('hidden');
+}
+
+async function applyAnswerLink() {
+  const link = document.getElementById('answerLinkInput').value.trim();
+  if (!link) return;
+  const hash = new URL(link).hash.substring(1);
+  const params = new URLSearchParams(hash);
+  if (params.has('answer')) {
+    const answer = JSON.parse(atob(params.get('answer')));
+    if (pc && isOfferer) await pc.setRemoteDescription(answer);
+    else alert('채팅을 시작한 후 Answer 링크를 적용하세요.');
+  } else alert('올바른 Answer 링크가 아닙니다.');
+}
+
+// 암호 입력 후 키 생성 (참가자 쪽에서 호출)
+async function setJoinPassword() {
+  const pwInput = document.getElementById('joinPassword');
+  password = pwInput.value;
+  if (password) {
+    await deriveSharedKey();
+    // 이미 answer 준비된 상태면 바로 채팅 시작
+    if (dc && dc.readyState === 'open') {
+      showChat();
+    }
+  }
+}
+
+// 암호 입력 필드에 이벤트 추가 (초기화 시)
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('joinPassword').addEventListener('input', setJoinPassword);
+  document.getElementById('joinPassword').addEventListener('change', setJoinPassword);
+});
 
 // ==================== WebRTC ====================
 function initPC() {
-  pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.services.mozilla.com:3478' }] });
-  pc.oniceconnectionstatechange = () => {
-    const ok = pc.iceConnectionState === 'connected';
-    document.getElementById('connDot').className = 'dot ' + (ok ? 'on' : 'off');
-    document.getElementById('connLabel').textContent = ok ? '연결됨' : '오프라인';
-    if (!ok && pc.iceConnectionState === 'disconnected') {
-      // 연결 끊김 표시
-    }
-  };
-  pc.ondatachannel = (e) => { dc = e.channel; setupDC(); };
+  pc = new RTCPeerConnection({ iceServers: getIceServers(), iceCandidatePoolSize: 2 });
+  pc.oniceconnectionstatechange = onIceState;
+  pc.ondatachannel = (event) => { dc = event.channel; setupDC(); };
 }
+
 function setupDC() {
-  dc.onopen = () => {
-    document.getElementById('connDot').className = 'dot on';
-    document.getElementById('connLabel').textContent = '연결됨';
+  if (!dc) return;
+  dc.onopen = async () => {
+    updateConn(true);
+    // 이미 암호가 있으면 키 유도 (Offerer가 암호 설정한 경우)
+    if (isOfferer && password) await deriveSharedKey();
+    showChat();
   };
-  dc.onmessage = handleMessage;
+  dc.onmessage = onMsg;
+  dc.onclose = () => updateConn(false);
 }
+
+function onIceState() {
+  const state = pc.iceConnectionState;
+  if (state === 'connected') updateConn(true);
+  else if (state === 'disconnected' || state === 'failed') { updateConn(false); showSimple(); }
+}
+
 function waitIce() {
   return new Promise(r => {
     if (pc.iceGatheringState === 'complete') r();
-    else pc.addEventListener('icegatheringstatechange', () => {
-      if (pc.iceGatheringState === 'complete') r();
-    });
+    else pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') r(); });
   });
+}
+
+// ==================== 대칭키 암호화 ====================
+async function deriveSharedKey() {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(password),
+    { name: 'PBKDF2' }, false, ['deriveKey']
+  );
+  sharedKey = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('p2p-chat-salt'), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptMessage(plaintext) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sharedKey, new TextEncoder().encode(plaintext));
+  return { iv: Array.from(new Uint8Array(iv)), ct: Array.from(new Uint8Array(ct)) };
+}
+
+async function decryptMessage(data) {
+  const iv = new Uint8Array(data.iv);
+  const ct = new Uint8Array(data.ct);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sharedKey, ct);
+  return new TextDecoder().decode(plain);
+}
+
+// ==================== 메시지 ====================
+async function sendText() {
+  const inp = document.getElementById('msgInput');
+  const t = inp.value.trim();
+  if (!t || !dc || dc.readyState !== 'open' || !sharedKey) {
+    if (!sharedKey) addMsg('🔐 암호를 먼저 설정/입력하세요.', 'system');
+    return;
+  }
+  const enc = await encryptMessage(t);
+  dc.send(JSON.stringify({ type: 'text', ...enc }));
+  addMsg(t, 'me');
+  inp.value = '';
+}
+
+function onMsg(e) {
+  try {
+    if (e.data instanceof ArrayBuffer) { /* 파일 처리 */ return; }
+    const d = JSON.parse(e.data);
+    if (d.type === 'text') {
+      if (!sharedKey) { addMsg('⚠️ 암호가 없어 메시지를 해독할 수 없습니다.', 'system'); return; }
+      decryptMessage(d).then(p => addMsg(p, 'other')).catch(() => addMsg('⚠️ 복호화 실패', 'system'));
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function addMsg(t, who) {
+  const c = document.getElementById('messages');
+  const d = document.createElement('div');
+  d.className = 'msg ' + (who === 'me' ? 'me' : (who === 'other' ? 'other' : ''));
+  d.innerHTML = `<div class="bubble">${escapeHtml(t)}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
+}
+
+// ==================== 파일 전송 (간소화) ====================
+async function handleFiles(files) { for (const f of files) await sendFile(f); }
+async function sendFile(f) {
+  if (!dc || dc.readyState !== 'open' || !sharedKey) return;
+  // 파일 전송은 생략 (필요하면 추가)
+}
+
+// ==================== UI 전환 ====================
+function showChat() {
+  document.getElementById('simpleMode').style.display = 'none';
+  document.getElementById('chatScreen').style.display = 'flex';
+}
+function showSimple() {
+  document.getElementById('simpleMode').style.display = 'block';
+  document.getElementById('chatScreen').style.display = 'none';
+}
+function updateConn(ok) {
+  const dot = document.getElementById('connDot'), lbl = document.getElementById('connLabel');
+  dot.className = 'dot ' + (ok ? 'on' : 'off');
+  lbl.textContent = ok ? '연결됨' : '오프라인';
 }
 function closeConnection() {
   if (pc) { pc.close(); pc = null; }
@@ -339,79 +465,14 @@ function closeConnection() {
   sharedKey = null;
 }
 
-// ==================== 암호화 ====================
-async function deriveSharedKey(password) {
-  const enc = new TextEncoder();
-  const km = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']);
-  sharedKey = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode('p2p-salt'), iterations: 100000, hash: 'SHA-256' },
-    km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
-  );
-}
-async function encrypt(msg) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sharedKey, new TextEncoder().encode(msg));
-  return { iv: Array.from(new Uint8Array(iv)), ct: Array.from(new Uint8Array(ct)) };
-}
-async function decrypt(data) {
-  const iv = new Uint8Array(data.iv);
-  const ct = new Uint8Array(data.ct);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sharedKey, ct);
-  return new TextDecoder().decode(plain);
-}
-
-// ==================== 메시지 전송/수신 ====================
-async function sendText() {
-  const inp = document.getElementById('msgInput');
-  const t = inp.value.trim();
-  if (!t || !dc || dc.readyState !== 'open' || !sharedKey) return;
-  const enc = await encrypt(t);
-  dc.send(JSON.stringify({ type: 'text', ...enc }));
-  addMessage(t, 'me');
-  inp.value = '';
-}
-function handleMessage(e) {
-  if (e.data instanceof ArrayBuffer) return;
-  const d = JSON.parse(e.data);
-  if (d.type === 'text' && sharedKey) {
-    decrypt(d).then(p => addMessage(p, 'other')).catch(() => addMessage('⚠️ 복호화 실패', 'system'));
-  }
-}
-function addMessage(t, who) {
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg ' + (who === 'me' ? 'me' : 'other');
-  div.innerHTML = `<div class="bubble">${escapeHtml(t)}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-}
-
 // ==================== 유틸 ====================
-function copyLink(id) {
+function copyText(id) { const t = document.getElementById(id); t.select(); navigator.clipboard.writeText(t.value).catch(() => {}); }
+function copyTextById(id) {
   const el = document.getElementById(id);
-  navigator.clipboard.writeText(el.textContent).then(() => alert('복사 완료!'));
+  const text = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ? el.value : el.textContent;
+  navigator.clipboard.writeText(text).then(() => alert('복사되었습니다!')).catch(() => {});
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
-
-// ==================== 초기화 ====================
-window.addEventListener('hashchange', () => {
-  // 링크로 접근 시 자동 처리
-  const hash = window.location.hash.substring(1);
-  const params = new URLSearchParams(hash);
-  if (params.has('offer')) {
-    document.getElementById('joinOfferSDP').value = atob(params.get('offer'));
-    showJoinRoom();
-  }
-});
-window.addEventListener('load', () => {
-  renderRoomList();
-  const hash = window.location.hash.substring(1);
-  const params = new URLSearchParams(hash);
-  if (params.has('offer')) {
-    document.getElementById('joinOfferSDP').value = atob(params.get('offer'));
-    showJoinRoom();
-  }
-});
 </script>
 </body>
 </html>
