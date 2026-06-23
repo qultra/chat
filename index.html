@@ -172,7 +172,7 @@
         <strong>🔐 채팅방 암호 입력</strong>
         <input type="password" id="chatPasswordInput" placeholder="상대와 공유한 암호">
         <button class="btn primary mt" id="submitPasswordBtn" onclick="submitPassword()">암호 설정</button>
-        <p class="text-sub mt">암호가 없으면 메시지를 보낼 수 없으며, 수신된 암호문만 표시됩니다.</p>
+        <p class="text-sub mt">암호가 없으면 수신된 암호문만 표시됩니다.</p>
         <p id="passwordError" class="text-sub" style="color:var(--danger); display:none;"></p>
       </div>
       <div id="messages"></div>
@@ -204,6 +204,10 @@ const ECDH={name:'ECDH',namedCurve:'P-256'};
 const PBKDF2_ITERS=600000;
 let fileReceive=null;
 const ICE_SERVERS = ['stun:stun.services.mozilla.com:3478','stun:stun.nextcloud.com:443'].map(u=>({urls:u}));
+
+// 타이핑 인디케이터를 암호화 채널과 분리하기 위해 별도의 레이블 사용
+let typingChannel = null;
+const TYPING_LABEL = 'typing';
 
 (async function init(){
   document.getElementById('msgInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendText();}});
@@ -247,7 +251,13 @@ async function startNewChat(){
   document.getElementById('offerPanel').classList.remove('hidden');
   document.getElementById('answerPanel').classList.add('hidden');
   document.getElementById('offerSpinner').style.display='inline-block';
-  initPC(); dc=pc.createDataChannel('chat',{ordered:true}); setupDC();
+  initPC();
+  // 메인 데이터 채널
+  dc = pc.createDataChannel('chat', { ordered: true });
+  // 타이핑 채널은 별도로 생성
+  typingChannel = pc.createDataChannel(TYPING_LABEL, { ordered: false, maxRetransmits: 0 });
+  setupDC();
+  setupTypingChannel();
   pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>waitIce().then(()=>{
     document.getElementById('offerSpinner').style.display='none';
     const offerB64=btoa(JSON.stringify(pc.localDescription));
@@ -255,7 +265,18 @@ async function startNewChat(){
   }));
 }
 async function initiateAnswer(offer){
-  isOfferer=false; initPC(); await pc.setRemoteDescription(offer);
+  isOfferer=false; initPC();
+  // 리모트의 데이터 채널을 받을 준비
+  pc.ondatachannel = (e) => {
+    if (e.channel.label === 'chat') {
+      dc = e.channel;
+      setupDC();
+    } else if (e.channel.label === TYPING_LABEL) {
+      typingChannel = e.channel;
+      setupTypingChannel();
+    }
+  };
+  await pc.setRemoteDescription(offer);
   const ans=await pc.createAnswer(); await pc.setLocalDescription(ans); await waitIce();
   document.getElementById('answerSpinner').style.display='none';
   document.getElementById('answerReadyPanel').classList.remove('hidden');
@@ -264,6 +285,10 @@ async function initiateAnswer(offer){
 async function createAnswerFromOffer(){
   const t=document.getElementById('remoteOfferSDP').value.trim(); if(!t)return;
   closeConnection(); isOfferer=false; initPC();
+  pc.ondatachannel = (e) => {
+    if (e.channel.label === 'chat') { dc = e.channel; setupDC(); }
+    else if (e.channel.label === TYPING_LABEL) { typingChannel = e.channel; setupTypingChannel(); }
+  };
   const u=new URL(t); const hp=new URLSearchParams(u.hash.substring(1));
   if(!hp.has('offer')){alert('올바른 초대 링크가 아닙니다.');return;}
   await pc.setRemoteDescription(JSON.parse(atob(hp.get('offer'))));
@@ -279,18 +304,25 @@ async function applyAnswerLink(){
   }catch(e){alert('올바르지 않은 Answer 링크입니다.');}
 }
 
-function initPC(){ pc=new RTCPeerConnection({iceServers:ICE_SERVERS}); pc.oniceconnectionstatechange=onIceState; pc.ondatachannel=e=>{dc=e.channel;setupDC();}; }
+function initPC(){ pc=new RTCPeerConnection({iceServers:ICE_SERVERS}); pc.oniceconnectionstatechange=onIceState; }
 function setupDC(){
   if(!dc)return;
   dc.onopen=()=>{
     updateConn(true); showChat();
-    // 이미 세션이 완료되었으면 다시 핸드셰이크하지 않음
     if (!handshakeDone && !sessionKey) {
       startEcdhExchange();
     }
   };
   dc.onmessage=onMsg;
   dc.onclose=()=>{updateConn(false);showSimple();};
+}
+function setupTypingChannel(){
+  if(!typingChannel)return;
+  typingChannel.onmessage = (e) => {
+    if (typeof e.data === 'string') {
+      document.getElementById('typingIndicator').style.display = e.data === '1' ? 'block' : 'none';
+    }
+  };
 }
 function onIceState(){
   const s=pc.iceConnectionState;
@@ -299,6 +331,13 @@ function onIceState(){
 }
 function waitIce(){return new Promise(r=>{if(pc.iceGatheringState==='complete')r();else pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState==='complete')r();});});}
 function updateConn(ok){document.getElementById('connDot').className='dot '+(ok?'on':'off');document.getElementById('connLabel').textContent=ok?'연결됨':'오프라인';}
+
+// 타이핑 전송 (암호화 없이 별도 채널로)
+function sendTyping(state) {
+  if (typingChannel && typingChannel.readyState === 'open') {
+    typingChannel.send(state ? '1' : '0');
+  }
+}
 
 async function startEcdhExchange(){
   try {
@@ -430,14 +469,25 @@ async function encryptPayload(obj){
 async function decryptPayload(d){
   if (!recvChain) throw new Error('세션키 없음');
   const { seq, iv, ct } = d;
-  if (seq <= recvChain.seq) throw new Error('Invalid seq');
-  while (recvChain.seq < seq-1) {
-    await ratchetForward(recvChain); recvChain.seq++;
+  // 복호화 실패 시 체인 롤백을 위해 현재 상태 저장
+  const prevChain = recvChain.chain;
+  const prevSeq = recvChain.seq;
+
+  try {
+    if (seq <= recvChain.seq) throw new Error('Invalid seq');
+    while (recvChain.seq < seq-1) {
+      await ratchetForward(recvChain); recvChain.seq++;
+    }
+    const mk = await ratchetForward(recvChain);
+    recvChain.seq = seq;
+    const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv: new Uint8Array(iv) }, mk, new Uint8Array(ct));
+    return JSON.parse(new TextDecoder().decode(plain));
+  } catch (e) {
+    // 실패 시 이전 상태로 복구
+    recvChain.chain = prevChain;
+    recvChain.seq = prevSeq;
+    throw e;
   }
-  const mk = await ratchetForward(recvChain);
-  recvChain.seq = seq;
-  const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv: new Uint8Array(iv) }, mk, new Uint8Array(ct));
-  return JSON.parse(new TextDecoder().decode(plain));
 }
 
 async function sendText(){
@@ -445,7 +495,7 @@ async function sendText(){
   const txt = inp.value.trim();
   if (!txt || !dc || dc.readyState !== 'open') return;
   if (!sessionKey) {
-    addMsg('⚠️ 암호를 먼저 설정해야 메시지를 암호화하여 보낼 수 있습니다.', 'system');
+    addMsg('⚠️ 암호를 먼저 설정해야 합니다.', 'system');
     return;
   }
   try {
@@ -458,14 +508,6 @@ async function sendText(){
   }
 }
 
-async function sendTyping(state){
-  if (!dc || dc.readyState !== 'open' || !sessionKey) return;
-  try {
-    const enc = await encryptPayload({ type:'typing', state });
-    dc.send(JSON.stringify({ type:'msg', ...enc }));
-  } catch (e) {}
-}
-
 function onMsg(e){
   if (e.data instanceof ArrayBuffer) { handleBinaryChunk(e.data); return; }
   try {
@@ -475,7 +517,6 @@ function onMsg(e){
       if (!sessionKey) { addEncryptedMessage(d); return; }
       decryptPayload(d).then(inner => {
         if (inner.type === 'text') { addMsg(inner.content, 'other', inner.id); sendReadReceipt(inner.id); }
-        else if (inner.type === 'typing') { document.getElementById('typingIndicator').style.display = inner.state ? 'block' : 'none'; }
         else if (inner.type === 'read') { markAsRead(inner.id); }
         else if (inner.type === 'delete') { document.getElementById('msg-'+inner.id)?.remove(); }
         else if (inner.type === 'file_start') { handleFileStart(inner); }
@@ -570,7 +611,7 @@ async function sendFile(file){
 function showChat(){ document.getElementById('simpleMode').style.display='none'; document.getElementById('chatScreen').style.display='flex'; }
 function showSimple(){ document.getElementById('simpleMode').style.display='block'; document.getElementById('chatScreen').style.display='none'; }
 function closeConnection(){
-  if(pc){pc.close();pc=null;} dc=null; authKey=sessionKey=null; sendChain=recvChain=null;
+  if(pc){pc.close();pc=null;} dc=null; typingChannel=null; authKey=sessionKey=null; sendChain=recvChain=null;
   salt=null; ourEcdhPair=null; peerEcdhPub=null; fileReceive=null; password=null;
   handshakeDone=false;
   document.getElementById('sessionFingerprint').textContent='';
