@@ -295,7 +295,7 @@ function setupDC(){
   if(!dc)return;
   dc.onopen=()=>{
     updateConn(true); showChat();
-    startEcdhExchange(); // 공개키 교환 시작
+    startEcdhExchange();
   };
   dc.onmessage=onMsg;
   dc.onclose=()=>{updateConn(false);showSimple();};
@@ -385,8 +385,18 @@ async function deriveSessionKey(){
     hkdfKey, { name:'AES-GCM', length:256 }, true, ['encrypt','decrypt']
   );
   const sb = await crypto.subtle.exportKey('raw', sessionKey);
-  sendChain = { chain: await hkdfExpand(sb, str2buf('send-chain')), seq:0 };
-  recvChain = { chain: await hkdfExpand(sb, str2buf('recv-chain')), seq:-1 };
+
+  // ★ 역할에 따라 송신/수신 체인 교차
+  const chainA = await hkdfExpand(sb, str2buf('chain-a'));
+  const chainB = await hkdfExpand(sb, str2buf('chain-b'));
+  if (isOfferer) {
+    sendChain = { chain: chainA, seq:0 };
+    recvChain = { chain: chainB, seq:-1 };
+  } else {
+    sendChain = { chain: chainB, seq:0 };
+    recvChain = { chain: chainA, seq:-1 };
+  }
+
   document.getElementById('sessionFingerprint').textContent = buf2hex(await crypto.subtle.digest('SHA-256', sb)).slice(0,32);
 }
 
@@ -445,10 +455,12 @@ async function sendText(){
   }
 }
 
-// ★ 타이핑 인디케이터를 평문으로 전송
-function sendTyping(state){
-  if (!dc || dc.readyState !== 'open') return;
-  dc.send(JSON.stringify({ type:'__typing__', state }));
+async function sendTyping(state){
+  if (!dc || dc.readyState !== 'open' || !sessionKey) return;
+  try {
+    const enc = await encryptPayload({ type:'typing', state });
+    dc.send(JSON.stringify({ type:'msg', ...enc }));
+  } catch (e) {}
 }
 
 function onMsg(e){
@@ -458,11 +470,6 @@ function onMsg(e){
   }
   try {
     const d = JSON.parse(e.data);
-    // 타이핑 인디케이터 평문 처리
-    if (d.type === '__typing__') {
-      document.getElementById('typingIndicator').style.display = d.state ? 'block' : 'none';
-      return;
-    }
     if (d.type === '__ecdhe__') {
       handleEcdheMessage(d);
       return;
@@ -476,6 +483,8 @@ function onMsg(e){
         if (inner.type === 'text') {
           addMsg(inner.content, 'other', inner.id);
           sendReadReceipt(inner.id);
+        } else if (inner.type === 'typing') {
+          document.getElementById('typingIndicator').style.display = inner.state ? 'block' : 'none';
         } else if (inner.type === 'read') {
           markAsRead(inner.id);
         } else if (inner.type === 'delete') {
