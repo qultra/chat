@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>P2P 메신저 – 링크 연결 문제 해결</title>
+  <title>P2P 메신저 – 모든 버그 수정</title>
   <style>
     :root {
       --bg: #0b0e14; --surface: #141a24; --card-bg: rgba(20,26,36,0.8);
@@ -55,6 +55,7 @@
     .btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
     .btn.primary { background: var(--accent); border:none; }
     .btn.danger { background: rgba(248,113,113,0.15); color: var(--danger); border-color: var(--danger); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
     .btn-group { display: flex; gap: 8px; }
     .btn-group .btn { flex:1; }
 
@@ -113,6 +114,12 @@
     .text-secondary { color: var(--text-secondary); font-size: 0.8rem; }
     .mt { margin-top: 10px; }
     .mb { margin-bottom: 8px; }
+    .spinner {
+      width: 20px; height: 20px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.8s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -129,7 +136,7 @@
     <!-- 방 목록 화면 -->
     <div id="roomListView" style="display:block;">
       <div class="card">
-        <button class="btn primary" onclick="showCreateRoom()">✨ 새 채팅</button>
+        <button id="btnNewChat" class="btn primary" onclick="startNewRoom()">✨ 새 채팅</button>
         <div class="btn-group mt">
           <button class="btn" onclick="exportAllData()">📥 백업</button>
           <button class="btn" onclick="document.getElementById('restoreFile').click()">📤 복원</button>
@@ -139,23 +146,24 @@
       <div id="roomListContainer" class="room-list"></div>
     </div>
 
-    <!-- 방 생성 (호스트) -->
+    <!-- 방 생성 화면 -->
     <div id="createRoomView" style="display:none;">
       <div class="card">
-        <button class="btn" onclick="showRoomList()" style="width:auto;">← 뒤로</button>
+        <button class="btn" onclick="goBackToRoomList()" style="width:auto;">← 뒤로</button>
         <input type="text" id="newRoomName" placeholder="방 이름" class="mt">
         <select id="newRoomType" class="mt">
           <option value="1:1">1:1 채팅</option>
           <option value="group">그룹 채팅</option>
           <option value="open">오픈 채널</option>
         </select>
-        <button class="btn primary mt" onclick="createNewRoom()">방 만들기</button>
+        <button id="btnCreateRoom" class="btn primary mt" onclick="createNewRoom()">방 만들기</button>
+        <div id="createSpinner" class="hidden mt" style="text-align:center;"><span class="spinner"></span> 생성 중...</div>
       </div>
       <div id="createdRoomInfo" style="display:none;" class="card">
         <p class="text-secondary">아래 링크를 상대에게 보내주세요.</p>
         <div id="inviteLink" style="background:#0f131c; padding:10px; border-radius:10px; word-break:break-all; font-size:0.75rem; margin:6px 0;"></div>
         <button class="btn" onclick="copyInviteLink()">📋 링크 복사</button>
-        <p class="text-secondary mt">상대가 보내줄 <strong>Answer 링크</strong>를 기다리세요.<br>페이지를 닫았다 다시 열어도 Answer 링크만 클릭하면 연결됩니다.</p>
+        <p class="text-secondary mt">상대가 Answer 링크를 보내면 여기로 돌아와서 기다리세요.</p>
       </div>
     </div>
 
@@ -196,11 +204,12 @@
 
 <script>
 // ==================== 전역 변수 ====================
-const ROOMS_KEY = 'p2p_rooms_v18';
+const ROOMS_KEY = 'p2p_rooms_v19';
 const MSG_PREFIX = 'p2p_msg_';
 let rooms = [], activeRoomId = null, sharedKey = null;
 let myPeerId = 'peer-' + crypto.randomUUID().slice(0,8);
 let peers = {}, connectedPeers = [], isOfferer = false;
+let isCreating = false; // 방 생성 중복 방지 플래그
 
 // ==================== URL-safe Base64 인코딩 ====================
 function toBase64URL(str) {
@@ -494,6 +503,13 @@ function showCreateRoom() { showView('createRoomView'); }
 function showChat() { showView('chatScreen'); }
 function showAutoJoin() { showView('autoJoinView'); }
 
+function goBackToRoomList() {
+  isCreating = false;
+  document.getElementById('btnCreateRoom').disabled = false;
+  document.getElementById('createSpinner').classList.add('hidden');
+  showRoomList();
+}
+
 function renderRoomList() {
   const c = document.getElementById('roomListContainer');
   if (!rooms.length) {
@@ -507,35 +523,70 @@ function renderRoomList() {
     </div>`).join('');
 }
 
+// ==================== 새 채팅 시작 (UI 전환) ====================
+function startNewRoom() {
+  if (isCreating) return;
+  document.getElementById('newRoomName').value = '';
+  document.getElementById('newRoomType').value = '1:1';
+  document.getElementById('createdRoomInfo').style.display = 'none';
+  document.getElementById('btnCreateRoom').disabled = false;
+  document.getElementById('createSpinner').classList.add('hidden');
+  showCreateRoom();
+}
+
 // ==================== 방 만들기 (호스트) ====================
 async function createNewRoom() {
+  if (isCreating) return;
+  const btn = document.getElementById('btnCreateRoom');
+  const spinner = document.getElementById('createSpinner');
+
+  // 버튼 비활성화 및 로딩 표시
+  isCreating = true;
+  btn.disabled = true;
+  spinner.classList.remove('hidden');
+
   const name = document.getElementById('newRoomName').value.trim() || '새 채팅방';
   const type = document.getElementById('newRoomType').value;
-  closeAllPeers(); isOfferer = true;
-  activeRoomId = crypto.randomUUID();
 
-  const room = { id: activeRoomId, name, type, createdAt: Date.now(), members: [myPeerId] };
-  rooms.push(room);
-  saveRooms();
+  try {
+    closeAllPeers(); isOfferer = true;
+    activeRoomId = crypto.randomUUID();
 
-  // Offer 생성 (모든 ICE 서버 사용)
-  const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
-  const dc = pc.createDataChannel('chat');
-  peers['local'] = { pc, dc };
-  setupDataChannel(dc, 'local');
+    const room = { id: activeRoomId, name, type, createdAt: Date.now(), members: [myPeerId] };
+    rooms.push(room);
+    saveRooms();
 
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await waitIce(pc);
-  monitorPC(pc, 'local');
+    // Offer 생성 (모든 ICE 서버 사용)
+    const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
+    const dc = pc.createDataChannel('chat');
+    peers['local'] = { pc, dc };
+    setupDataChannel(dc, 'local');
 
-  // sessionStorage에 Offer 저장 (재접속 대비)
-  sessionStorage.setItem(LAST_OFFER_KEY, JSON.stringify({ roomId: activeRoomId, offer: pc.localDescription }));
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await waitIce(pc);
+    monitorPC(pc, 'local');
 
-  const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(pc.localDescription));
-  document.getElementById('inviteLink').textContent = link;
-  document.getElementById('createdRoomInfo').style.display = 'block';
-  console.log('🔗 초대 링크 생성:', link);
+    // sessionStorage에 Offer 저장 (재접속 대비)
+    sessionStorage.setItem(LAST_OFFER_KEY, JSON.stringify({ roomId: activeRoomId, offer: pc.localDescription }));
+
+    const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(pc.localDescription));
+    document.getElementById('inviteLink').textContent = link;
+    document.getElementById('createdRoomInfo').style.display = 'block';
+    console.log('🔗 초대 링크 생성:', link);
+
+    // 성공 후 UI 업데이트
+    btn.disabled = false;
+    spinner.classList.add('hidden');
+    isCreating = false;
+
+  } catch (e) {
+    console.error('방 생성 실패:', e);
+    alert('방 생성에 실패했습니다. 다시 시도해주세요.');
+    btn.disabled = false;
+    spinner.classList.add('hidden');
+    isCreating = false;
+  }
 }
 
 function copyInviteLink() {
@@ -770,14 +821,18 @@ function enterRoom(roomId) {
 
 // ==================== 초대 / 나가기 ====================
 async function inviteToCurrentRoom() {
-  if (!activeRoomId || !isOfferer) return;
+  if (!activeRoomId || !isOfferer) {
+    alert('방장만 초대할 수 있습니다.');
+    return;
+  }
+  // 기존 피어가 있는지 확인
   if (!peers['local']) {
-    await createNewRoom();
+    alert('연결이 끊겼습니다. 방을 다시 열어주세요.');
     return;
   }
   const offer = peers['local'].pc.localDescription;
   const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(offer));
-  prompt('초대 링크 복사:', link);
+  prompt('초대 링크를 복사하세요:', link);
 }
 
 function leaveCurrentRoom() {
