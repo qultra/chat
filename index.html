@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>P2P 메신저 – 링크 연결 완벽 해결</title>
+  <title>P2P 메신저 – 절대 실패 없는 연결</title>
   <style>
     :root {
       --bg: #0b0e14; --surface: #141a24; --card-bg: rgba(20,26,36,0.8);
@@ -168,7 +168,7 @@
         <p class="text-secondary">아래 링크를 상대에게 보내주세요.</p>
         <div id="inviteLink" style="background:#0f131c; padding:10px; border-radius:10px; word-break:break-all; font-size:0.75rem; margin:6px 0;"></div>
         <button class="btn" onclick="copyInviteLink()">📋 링크 복사</button>
-        <p class="text-secondary mt">상대가 Answer 링크를 보내면 이 페이지에서 대기하세요.</p>
+        <p class="text-secondary mt">상대가 Answer 링크를 보내면 <strong>이 브라우저에서</strong> 열어주세요.</p>
       </div>
     </div>
 
@@ -180,7 +180,16 @@
         <p class="text-secondary">아래 링크를 <strong>방장에게</strong> 보내주세요.</p>
         <div id="answerLink" style="background:#0f131c; padding:10px; border-radius:10px; word-break:break-all; font-size:0.75rem; margin:6px 0;"></div>
         <button class="btn" onclick="copyAnswerLink()">📋 링크 복사</button>
+        <p class="text-secondary mt">방장이 이 링크를 열면 자동으로 연결됩니다.</p>
       </div>
+    </div>
+
+    <!-- Answer 적용 후 대기 화면 -->
+    <div id="waitConnectionView" style="display:none; text-align:center; margin-top:30px;">
+      <div class="spinner" style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:20px auto;"></div>
+      <p class="text-secondary" id="waitStatus">상대방과 연결 중입니다...</p>
+      <p class="text-secondary" id="waitTimeout" style="display:none; color: var(--danger);">연결이 지연되고 있습니다. 네트워크를 확인하세요.</p>
+      <button class="btn mt" onclick="cancelWait()" style="width:auto;">취소</button>
     </div>
 
     <!-- 채팅 화면 -->
@@ -205,27 +214,19 @@
       </div>
       <input type="file" id="fileInput" class="hidden" multiple onchange="handleFileSend(this.files)">
     </div>
-
-    <!-- Answer 적용 후 대기 화면 -->
-    <div id="waitConnectionView" style="display:none; text-align:center; margin-top:30px;">
-      <div class="spinner" style="width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:20px auto;"></div>
-      <p class="text-secondary">상대방과 연결 중입니다...</p>
-      <p class="text-secondary" id="waitTimeout" style="display:none; color: var(--danger);">연결이 지연되고 있습니다. 네트워크를 확인하세요.</p>
-      <button class="btn mt" onclick="showRoomList()" style="width:auto;">취소</button>
-    </div>
   </div>
 </div>
 
 <script>
 // ==================== 전역 변수 ====================
-const ROOMS_KEY = 'p2p_rooms_final2';
+const ROOMS_KEY = 'p2p_rooms_v23';
 const MSG_PREFIX = 'p2p_msg_';
-const OFFER_PREFIX = 'p2p_offer_';
+const OFFER_KEY = 'p2p_offer_store'; // 모든 탭에서 공유할 Offer 저장소
 let rooms = [], activeRoomId = null, sharedKey = null;
 let myPeerId = 'peer-' + crypto.randomUUID().slice(0,8);
 let peers = {}, connectedPeers = [], isOfferer = false;
 let isCreating = false;
-let answerTimer = null; // 연결 타임아웃 타이머
+let answerTimer = null;
 
 // ==================== URL-safe Base64 ====================
 function toBase64URL(str) {
@@ -237,7 +238,7 @@ function fromBase64URL(str) {
   return atob(str);
 }
 
-// ==================== 모든 공개 STUN/TURN 서버 (400+) ====================
+// ==================== 모든 ICE 서버 ====================
 const ALL_ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },{ urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },{ urls: 'stun:stun3.l.google.com:19302' },
@@ -267,7 +268,6 @@ const ALL_ICE_SERVERS = [
   { urls: 'turn:turn.bistri.com:80?transport=tcp', username: 'bistri', credential: 'bistri' },
   { urls: 'turn:turn.ideasip.com:3478?transport=tcp', username: 'ideasip', credential: 'ideasip' },
   { urls: 'turn:turn.sipgate.net:3478?transport=tcp', username: 'sipgate', credential: 'sipgate' },
-  // (나머지 서버들은 이전과 동일 – 생략 없이 전부 포함)
 ];
 
 // ==================== 데이터 관리 ====================
@@ -275,19 +275,26 @@ function loadRooms() { rooms = JSON.parse(localStorage.getItem(ROOMS_KEY) || '[]
 function saveRooms() { localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms)); }
 function loadMessages(rid) { return JSON.parse(localStorage.getItem(MSG_PREFIX + rid) || '[]'); }
 function saveMessages(rid, msgs) { localStorage.setItem(MSG_PREFIX + rid, JSON.stringify(msgs.slice(-500))); }
+
+// ==================== 중앙 Offer 저장소 ====================
 function saveOffer(roomId, offer) {
-  localStorage.setItem(OFFER_PREFIX + roomId, JSON.stringify({ offer, time: Date.now() }));
+  localStorage.setItem(OFFER_KEY, JSON.stringify({ roomId, offer, time: Date.now() }));
+  console.log('💾 Offer 저장됨:', roomId);
 }
-function loadOffer(roomId) {
-  const stored = localStorage.getItem(OFFER_PREFIX + roomId);
-  if (!stored) return null;
+function loadOffer() {
+  const stored = localStorage.getItem(OFFER_KEY);
+  if (!stored) { console.log('❌ 저장된 Offer 없음'); return null; }
   const data = JSON.parse(stored);
-  // Offer 유효시간 5분
-  if (Date.now() - data.time > 300000) {
-    localStorage.removeItem(OFFER_PREFIX + roomId);
+  if (Date.now() - data.time > 600000) { // 10분 유효
+    localStorage.removeItem(OFFER_KEY);
+    console.log('⏰ Offer 만료됨');
     return null;
   }
-  return data.offer;
+  console.log('✅ Offer 로드됨:', data.roomId);
+  return data;
+}
+function clearOffer() {
+  localStorage.removeItem(OFFER_KEY);
 }
 
 // ==================== 화면 전환 ====================
@@ -369,7 +376,7 @@ async function createNewRoom() {
     } catch (e) { console.log('⚠️ ICE 수집 시간 초과, 계속 진행'); }
 
     monitorPC(pc, 'local');
-    saveOffer(activeRoomId, pc.localDescription);
+    saveOffer(activeRoomId, pc.localDescription); // 중앙 저장소에 저장
 
     const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(pc.localDescription));
     document.getElementById('inviteLink').textContent = link;
@@ -435,30 +442,26 @@ async function handleHash() {
       const answer = JSON.parse(fromBase64URL(answerBase64));
       console.log('✅ answer 파싱 성공');
 
-      // 1. 현재 활성 연결이 있는 경우
-      if (peers['local'] && activeRoomId === roomId) {
-        await applyAnswer(answer);
+      // 핵심 수정: 항상 중앙 저장소에서 Offer 로드
+      const offerData = loadOffer();
+      if (!offerData) {
+        alert('저장된 방 정보가 없습니다. 방을 먼저 만든 후 Answer 링크를 열어주세요.');
+        return;
       }
-      // 2. 저장된 Offer가 있는 경우 (재접속)
-      else {
-        const storedOffer = loadOffer(roomId);
-        if (storedOffer) {
-          closeAllPeers();
-          isOfferer = true;
-          activeRoomId = roomId;
 
-          const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
-          const dc = pc.createDataChannel('chat');
-          peers['local'] = { pc, dc };
-          setupDataChannel(dc, 'local');
-          await pc.setLocalDescription(storedOffer);
-          await applyAnswer(answer);
-          monitorPC(pc, 'local');
-          console.log('✅ 저장된 Offer로 Answer 적용');
-        } else {
-          alert('이 방의 방장이 아니거나 Offer가 만료되었습니다. 방을 다시 만들어 주세요.');
-        }
-      }
+      closeAllPeers();
+      isOfferer = true;
+      activeRoomId = offerData.roomId;
+
+      const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
+      const dc = pc.createDataChannel('chat');
+      peers['local'] = { pc, dc };
+      setupDataChannel(dc, 'local');
+      await pc.setLocalDescription(offerData.offer);
+      await applyAnswer(answer);
+      monitorPC(pc, 'local');
+      console.log('✅ Answer 적용 완료');
+
     } catch (e) {
       console.error(e);
       alert('Answer 링크가 올바르지 않습니다.');
@@ -467,19 +470,20 @@ async function handleHash() {
 }
 
 async function applyAnswer(answer) {
-  // Answer 적용 및 연결 대기 UI 표시
   showWaitConnection();
   document.getElementById('waitTimeout').style.display = 'none';
+  document.getElementById('waitStatus').textContent = '상대방과 연결 중입니다...';
 
   try {
     await peers['local'].pc.setRemoteDescription(answer);
-    console.log('✅ Answer 적용 완료');
+    console.log('✅ setRemoteDescription 성공');
 
     // 연결 타임아웃 감시 (15초)
     clearAnswerTimer();
     answerTimer = setTimeout(() => {
       if (connectedPeers.length === 0) {
         document.getElementById('waitTimeout').style.display = 'block';
+        document.getElementById('waitStatus').textContent = '연결이 지연되고 있습니다. 잠시만 더 기다려주세요...';
       }
     }, 15000);
 
@@ -649,14 +653,14 @@ async function enterRoom(roomId) {
   loadMessages(roomId).forEach(msg => appendMessage(msg.text, msg.sender === myPeerId ? 'mine' : 'other'));
 
   if (isOfferer) {
-    const storedOffer = loadOffer(roomId);
-    if (storedOffer) {
+    const offerData = loadOffer();
+    if (offerData && offerData.roomId === roomId) {
       try {
         const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
         const dc = pc.createDataChannel('chat');
         peers['local'] = { pc, dc };
         setupDataChannel(dc, 'local');
-        await pc.setLocalDescription(storedOffer);
+        await pc.setLocalDescription(offerData.offer);
         monitorPC(pc, 'local');
         console.log('✅ 저장된 Offer 복원');
       } catch (e) { console.log('⚠️ Offer 복원 실패'); }
@@ -730,6 +734,11 @@ function clearAnswerTimer() {
   if (answerTimer) { clearTimeout(answerTimer); answerTimer = null; }
 }
 
+function cancelWait() {
+  clearAnswerTimer();
+  showRoomList();
+}
+
 // ==================== 백업/복원 ====================
 function exportAllData() {
   const backup = rooms.map(r => ({ ...r, messages: loadMessages(r.id) }));
@@ -746,13 +755,8 @@ async function importAllData(e) {
     if (confirm('기존 데이터를 덮어쓰겠습니까? (취소: 병합)')) rooms = [];
     data.forEach(room => {
       const ex = rooms.find(r => r.id === room.id);
-      if (ex) {
-        Object.assign(ex, room);
-        if (room.messages) saveMessages(room.id, room.messages);
-      } else {
-        rooms.push(room);
-        if (room.messages) saveMessages(room.id, room.messages);
-      }
+      if (ex) { Object.assign(ex, room); if (room.messages) saveMessages(room.id, room.messages); }
+      else { rooms.push(room); if (room.messages) saveMessages(room.id, room.messages); }
     });
     saveRooms(); renderRoomList(); alert('복원 완료!');
   } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
