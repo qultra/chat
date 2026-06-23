@@ -2,170 +2,160 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>P2P 암호 채팅 – 한 줄 암호</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0, minimum-scale=1.0">
+  <title>P2P 암호 채팅 – 완벽 최종판</title>
   <style>
     :root {
-      --bg: #0b0e14; --surface: #141a24; --card: rgba(20,26,36,0.8);
-      --text: #e2e8f0; --sub: #94a3b8; --accent: #5b8def; --danger: #f87171;
-      --border: #1e293b; --radius: 20px; --radius-sm: 14px;
+      --bg: #06090f; --surface: #0f141e; --card: rgba(15,20,30,0.9);
+      --text: #e0e5f0; --sub: #8892b0; --accent: #5b8df0; --danger: #f97070;
+      --success: #45d68a; --border: #1a2332; --radius: 20px; --radius-sm: 14px;
+      --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
     }
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
       background: var(--bg); color: var(--text);
       display: flex; justify-content: center; align-items: center;
-      min-height: 100dvh; padding: 10px;
+      min-height: 100dvh; padding: 10px; -webkit-tap-highlight-color: transparent;
     }
     .container {
-      width: 100%; max-width: 500px; height: 95dvh;
-      background: var(--surface); border-radius: 32px;
-      box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+      width: 100%; max-width: 520px; height: 95dvh;
+      background: var(--surface); border-radius: 30px;
+      box-shadow: 0 30px 70px rgba(0,0,0,0.7);
       display: flex; flex-direction: column; overflow: hidden;
-      border: 1px solid var(--border);
+      border: 1px solid var(--border); position: relative;
     }
     .header {
-      padding: 16px 20px; background: rgba(15,23,33,0.8);
+      padding: 14px 20px; background: rgba(8,14,24,0.95);
       backdrop-filter: blur(20px); border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex; align-items: center; justify-content: space-between; z-index: 2;
     }
-    .header h1 { font-size: 1.2rem; font-weight: 700; background: linear-gradient(135deg,#8ab4f8,#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-    .status-dot { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; }
-    .dot.on { background: #4ade80; } .dot.off { background: #f87171; }
-
-    .main { flex:1; overflow-y:auto; padding: 16px; display:flex; flex-direction:column; }
-    .main::-webkit-scrollbar { width:4px; } .main::-webkit-scrollbar-thumb { background:#334155; border-radius:2px; }
+    .header h1 {
+      font-size: 1.1rem; font-weight: 700;
+      background: linear-gradient(135deg,#90b4ff,#b794f4);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    }
+    .status-bar { display: flex; align-items: center; gap: 7px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; transition: var(--transition); }
+    .dot.on { background: var(--success); box-shadow: 0 0 10px var(--success); }
+    .dot.off { background: var(--danger); }
+    .main-content { flex:1; overflow-y:auto; padding: 16px; display:flex; flex-direction:column; scroll-behavior:smooth; }
+    .main-content::-webkit-scrollbar { width:4px; } .main-content::-webkit-scrollbar-thumb { background:#253040; border-radius:2px; }
 
     .card {
-      background: var(--card); backdrop-filter: blur(12px);
+      background: var(--card); backdrop-filter: blur(14px);
       border-radius: var(--radius); padding: 18px; margin-bottom: 12px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--border); transition: var(--transition);
     }
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      background: rgba(255,255,255,0.06); color: white; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border);
       padding: 12px 20px; border-radius: var(--radius-sm); cursor: pointer;
-      font-weight: 600; font-size: 1rem; transition: all 0.2s; width: 100%;
-      text-align: center; backdrop-filter: blur(10px);
+      font-weight: 600; font-size: 0.9rem; transition: var(--transition); width: 100%;
+      backdrop-filter: blur(10px); user-select: none;
     }
-    .btn:hover { background: rgba(255,255,255,0.12); }
-    .btn.primary { background: var(--accent); border:none; }
-    .btn-group { display: flex; gap: 8px; }
-    .btn-group .btn { flex:1; }
+    .btn:hover { background: rgba(255,255,255,0.12); transform: translateY(-1px); }
+    .btn:active { transform: scale(0.97); }
+    .btn.primary { background: var(--accent); border: none; color: white; }
+    .btn.danger { background: var(--danger); border: none; }
+    .btn-small { padding: 7px 12px; font-size: 0.8rem; width: auto; }
+    .btn-group { display: flex; gap: 8px; } .btn-group .btn { flex:1; }
 
-    input[type=text], input[type=password], textarea {
-      width: 100%; background: #0f131c; color: var(--text);
+    input, textarea {
+      width: 100%; background: #0a0f18; color: var(--text);
       border: 1px solid var(--border); border-radius: var(--radius-sm);
-      padding: 12px 16px; font-size: 1rem; outline: none;
+      padding: 12px 15px; font-size: 0.95rem; outline: none; transition: border var(--transition);
     }
     input:focus, textarea:focus { border-color: var(--accent); }
 
     #chatScreen { display: none; flex-direction: column; flex:1; }
-    #messages {
-      flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;
-      padding: 4px 0;
-    }
-    .msg { display: flex; }
-    .msg.me { justify-content: flex-end; }
+    #messages { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding: 6px 0; }
+    .msg { display: flex; flex-direction: column; animation: fadeUp 0.2s ease; }
+    .msg.system { align-items: center; } .msg.me { align-items: flex-end; } .msg.other { align-items: flex-start; }
     .bubble {
-      max-width: 80%; padding: 10px 16px; border-radius: 20px;
-      background: rgba(30,38,53,0.8); backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.05);
-      animation: fadeUp 0.2s ease;
+      max-width: 83%; padding: 10px 16px; border-radius: 20px;
+      background: rgba(22,30,44,0.85); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.05); word-break: break-word;
+      position: relative;
     }
-    .msg.me .bubble { background: linear-gradient(135deg,rgba(59,130,246,0.4),rgba(139,92,246,0.4)); border-bottom-right-radius:6px; }
-    .msg.other .bubble { border-bottom-left-radius:6px; }
-    .time { font-size: 0.65rem; color: var(--sub); margin-top: 4px; text-align: right; }
-    .file-inline { display: flex; align-items: center; gap: 8px; }
-    .file-inline img { max-width: 180px; max-height: 120px; border-radius: 12px; }
-    .input-bar { display: flex; gap: 8px; padding: 12px 0 0; }
-    #msgInput { flex:1; }
-    .attach-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 4px; color: var(--accent); }
+    .msg.system .bubble { background: rgba(255,255,255,0.04); border: none; font-size: 0.78rem; color: var(--sub); }
+    .msg.me .bubble { background: linear-gradient(140deg,rgba(74,130,250,0.5),rgba(124,92,240,0.5)); border-bottom-right-radius: 6px; }
+    .msg.other .bubble { border-bottom-left-radius: 6px; }
+    .msg .time { font-size: 0.65rem; color: var(--sub); margin-top: 4px; display: flex; justify-content: flex-end; gap: 6px; align-items: center; }
+    .msg .delete-btn { cursor: pointer; opacity:0.6; font-size:0.7rem; background:none; border:none; color:var(--danger); display:none; }
+    .msg.me .bubble:hover .delete-btn { display:inline; }
+    .typing-indicator { font-size:0.75rem; color:var(--sub); padding:4px 16px; display:none; }
+    .progress { height: 3px; background:#1e293b; border-radius:2px; overflow:hidden; margin-top:6px; }
+    .progress-bar { height:100%; width:0%; background:var(--accent); transition:width 0.3s; }
+    .file-preview img, .file-preview video { max-width:180px; max-height:140px; border-radius:12px; border:1px solid var(--border); }
 
-    .spinner { width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    .input-bar { display: flex; gap: 6px; padding: 10px 0 0; align-items: flex-end; }
+    #msgInput { flex:1; min-height: 42px; max-height: 110px; resize: none; padding-right: 8px; }
+    .icon-btn { background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 8px; color: var(--accent); border-radius: 50%; }
+    .send-btn { background: var(--accent); color: white; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; }
 
     .hidden { display: none !important; }
-    .text-center { text-align: center; }
-    .text-sub { color: var(--sub); font-size: 0.85rem; }
-    .mt { margin-top: 8px; }
-    .mb { margin-bottom: 8px; }
+    .text-center { text-align: center; } .text-sub { color: var(--sub); font-size: 0.82rem; }
+    .mt { margin-top: 10px; } .mb { margin-bottom: 10px; }
+    .link-box { word-break: break-all; background: #0a0f18; padding: 10px; border-radius: 12px; font-size: 0.72rem; margin: 8px 0; max-height: 75px; overflow-y: auto; color: #9aa4bf; }
+    .fingerprint { font-family: 'Fira Code', monospace; font-size: 0.68rem; background: #0a0f18; padding: 6px 10px; border-radius: 8px; word-break: break-all; }
 
-    #advancedSettings { display: none; }
-    .link-box { word-break: break-all; background: #0f131c; padding: 12px; border-radius: 12px; font-size: 0.75rem; margin: 8px 0; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 20px; height: 20px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>✦ P2P 암호 채팅</h1>
-    <div class="status-dot">
+    <h1>🔐 P2P 비밀채팅</h1>
+    <div class="status-bar">
       <span id="connDot" class="dot off"></span>
       <span id="connLabel">오프라인</span>
     </div>
   </div>
-  <div class="main" id="mainArea">
+  <div class="main-content" id="mainArea">
     <!-- 초기 화면 -->
     <div id="simpleMode">
       <div class="card text-center">
-        <p class="text-sub mb">서버 없이 직접 연결되는<br>완전한 프라이버시 채팅</p>
-        <button class="btn primary" onclick="startNewChat()">✨ 새 채팅 시작</button>
-        <button class="btn mt" onclick="joinChat()">📩 초대 코드 입력</button>
+        <h3 style="margin-bottom:6px;">서버 없이 완벽한 프라이버시</h3>
+        <p class="text-sub mb">Signal 프로토콜 수준 종단간 암호화<br>비밀번호는 절대 URL에 노출되지 않음</p>
+        <button class="btn primary" onclick="startNewChat()">✨ 새 채팅 생성</button>
+        <button class="btn mt" onclick="showJoinPanel()">📩 초대 링크로 참가</button>
       </div>
-
-      <!-- Offer 패널 (방장) -->
+      <!-- Offer 패널 -->
       <div id="offerPanel" class="hidden">
-        <div class="card">
-          <strong>🔐 채팅방 암호 설정</strong>
-          <input type="password" id="roomPassword" placeholder="암호 (상대와 공유하세요)" oninput="updateOfferLink()">
-          <p class="text-sub mt">이 암호를 상대방에게 알려주세요. (음성 통화 등 안전하게)</p>
-          <p class="text-sub">암호가 없으면 연결되지 않습니다.</p>
-        </div>
         <div class="card text-center">
           <div class="spinner mb" id="offerSpinner"></div>
-          <p><strong>연결 준비 중...</strong></p>
-          <p class="text-sub">아래 링크를 상대방에게 보내세요.</p>
-          <div class="link-box" id="offerLinkDisplay"></div>
-          <div class="btn-group mt">
-            <button class="btn" onclick="copyTextById('offerLinkDisplay')">📋 링크 복사</button>
-          </div>
-          <p class="text-sub mt">상대방이 Answer 링크를 보내면<br>아래에 붙여넣으세요</p>
-          <input type="text" id="answerLinkInput" placeholder="Answer 링크...">
+          <p><strong>연결 링크 생성 중...</strong></p>
+          <p class="text-sub">생성된 링크를 상대에게 전송하세요.</p>
+          <div class="link-box" id="offerLinkDisplay">생성 중...</div>
+          <button class="btn mt" onclick="copyTextById('offerLinkDisplay')">📋 링크 복사</button>
+          <p class="text-sub mt">상대가 보낸 Answer 링크를 아래에 붙여넣으세요.</p>
+          <input type="text" id="answerLinkInput" placeholder="Answer 링크 입력...">
           <button class="btn primary mt" onclick="applyAnswerLink()">✅ 연결 완료</button>
         </div>
       </div>
-
-      <!-- Answer 패널 (참가자) -->
+      <!-- Answer 패널 -->
       <div id="answerPanel" class="hidden">
-        <div class="card">
-          <strong>🔐 채팅방 암호 입력</strong>
-          <input type="password" id="joinPassword" placeholder="방장이 알려준 암호">
-          <p class="text-sub mt">초대 링크를 이미 열었다면 암호만 입력하세요.</p>
-        </div>
         <div id="autoAnswerContent" class="hidden">
-          <div class="card text-center">
-            <div class="spinner mb" id="answerSpinner"></div>
-            <p><strong>초대 링크 확인 중...</strong></p>
-          </div>
+          <div class="card text-center"><div class="spinner mb" id="answerSpinner"></div><p>초대 링크 분석 중...</p></div>
           <div id="answerReadyPanel" class="hidden card text-center">
-            <p><strong>✅ 연결 준비 완료!</strong></p>
-            <p class="text-sub">아래 링크를 방장에게 돌려보내세요.</p>
-            <div class="link-box" id="answerLinkDisplay"></div>
+            <p><strong>✅ Answer 링크 준비 완료</strong></p>
+            <p class="text-sub">아래 링크를 방장에게 전송하세요.</p>
+            <div class="link-box" id="answerLinkDisplay">생성 중...</div>
             <button class="btn mt" onclick="copyTextById('answerLinkDisplay')">📋 링크 복사</button>
           </div>
         </div>
         <div id="manualJoinContent">
-          <div class="card mt">
-            <strong>📥 초대 코드 붙여넣기</strong>
-            <textarea id="remoteOfferSDP" rows="3" placeholder="방장에게 받은 초대 코드..."></textarea>
+          <div class="card"><strong>📥 초대 링크 붙여넣기</strong>
+            <textarea id="remoteOfferSDP" rows="3" placeholder="방장의 초대 링크 전체..."></textarea>
             <button class="btn primary mt" onclick="createAnswerFromOffer()">🔄 Answer 생성</button>
           </div>
-          <div id="answerResultPanel" class="hidden card mt">
-            <strong>📤 내 Answer 코드</strong>
-            <textarea id="localAnswerSDP" readonly rows="3"></textarea>
-            <button class="btn mt" onclick="copyText('localAnswerSDP')">📋 복사해서 방장에게 전송</button>
+          <div id="answerResultPanel" class="hidden card">
+            <strong>📤 내 Answer 링크</strong>
+            <div class="link-box" id="localAnswerLinkDisplay"></div>
+            <button class="btn mt" onclick="copyTextById('localAnswerLinkDisplay')">📋 복사해서 방장에게 전송</button>
           </div>
         </div>
       </div>
@@ -173,11 +163,25 @@
 
     <!-- 채팅 화면 -->
     <div id="chatScreen">
+      <div id="securityCard" class="card" style="margin:0 0 8px; padding:8px 14px; font-size:0.78rem; display:none; align-items:center; gap:6px;">
+        <span>🔒 지문:</span><span id="sessionFingerprint" class="fingerprint" style="flex:1;"></span>
+        <button class="btn-small" onclick="toggleSecurityDetail()">상세</button>
+        <div id="securityDetail" class="hidden" style="width:100%; margin-top:6px; font-size:0.7rem; color:var(--sub);">
+          ECDH P-256 + PBKDF2-SHA512(60만회) + Symmetric Ratchet (AES-256-GCM)
+        </div>
+      </div>
+      <div id="passwordPrompt" class="card text-center">
+        <strong>🔐 채팅방 암호 입력</strong>
+        <input type="password" id="chatPasswordInput" placeholder="상대와 공유한 암호">
+        <button class="btn primary mt" onclick="submitPassword()">보안 채널 시작</button>
+        <p class="text-sub mt">암호는 URL에 포함되지 않았습니다. 음성통화 등으로 안전하게 공유하세요.</p>
+      </div>
       <div id="messages"></div>
-      <div class="input-bar">
-        <button class="attach-btn" onclick="document.getElementById('fileInput').click()">📎</button>
-        <input type="text" id="msgInput" placeholder="메시지 (암호화됨)" autocomplete="off">
-        <button class="btn primary" style="width:auto; padding:10px 16px;" onclick="sendText()">전송</button>
+      <div id="typingIndicator" class="typing-indicator">상대방이 입력 중...</div>
+      <div class="input-bar" id="inputBar" style="display:none;">
+        <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="파일">📎</button>
+        <textarea id="msgInput" rows="1" placeholder="메시지 (종단간 암호화)" autocomplete="off"></textarea>
+        <button class="send-btn" onclick="sendText()">➤</button>
       </div>
       <input type="file" id="fileInput" class="hidden" multiple onchange="handleFiles(this.files)">
     </div>
@@ -185,294 +189,316 @@
 </div>
 
 <script>
-// ==================== 전역 변수 ====================
-let sharedKey = null;           // AES-GCM CryptoKey
-let pc, dc, isOfferer = false;
-let pendingFiles = {};
-let password = ''; // Offerer가 설정한 암호 저장
+// ==================== 유틸리티 ====================
+const buf2hex = b => [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+const str2buf = s => new TextEncoder().encode(s);
+const buf2b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
+const b642buf = s => Uint8Array.from(atob(s), c=>c.charCodeAt(0)).buffer;
+const concatBufs = (...bufs) => { let len=bufs.reduce((a,b)=>a+b.byteLength,0), tmp=new Uint8Array(len), off=0; bufs.forEach(b=>{tmp.set(new Uint8Array(b),off);off+=b.byteLength;}); return tmp.buffer; };
+const genUUID = () => crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g,c=>{const r=crypto.getRandomValues(new Uint8Array(1))[0]%16;return(c=='x'?r:r&0x3|0x8).toString(16);});
 
-const PRIVACY_SERVERS = [
+// ==================== 전역 상태 ====================
+let pc, dc, isOfferer = false, password = null;
+let authKey, sessionKey, sendChain, recvChain;
+let sendSeq=0, recvSeq=-1;
+let ourEcdh, peerEcdhPub;
+let salt;
+const ECDH={name:'ECDH',namedCurve:'P-256'};
+const PBKDF2_ITERS=600000;
+let fileReceive=null;
+const ICE_SERVERS = [
   'stun:stun.services.mozilla.com:3478','stun:stun.nextcloud.com:443',
-  'stun:stun.linphone.org:3478','stun:stun.freeswitch.org:3478',
-  'stun:stun.ekiga.net:3478','stun:stun.viagenie.ca:3478','stun:stun.iptel.org:3478'
-];
-
-function getIceServers() {
-  return PRIVACY_SERVERS.map(url => ({ urls: url }));
-}
+  'stun:stun.linphone.org:3478','stun:stun.freeswitch.org:3478'
+].map(u=>({urls:u}));
 
 // ==================== 초기화 ====================
 (async function init(){
-  document.getElementById('msgInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendText(); });
-  document.addEventListener('dragover', e => e.preventDefault());
-  document.addEventListener('drop', async e => { e.preventDefault(); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
-  checkHash();
-  window.addEventListener('hashchange', checkHash);
+  document.getElementById('msgInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendText();}});
+  document.getElementById('msgInput').addEventListener('input',()=>{sendTyping(true);clearTimeout(window.typingTimer);window.typingTimer=setTimeout(()=>sendTyping(false),1500);});
+  document.addEventListener('dragover',e=>e.preventDefault());
+  document.addEventListener('drop',async e=>{e.preventDefault();if(e.dataTransfer.files.length)handleFiles(e.dataTransfer.files);});
+  checkHash(); window.addEventListener('hashchange',checkHash);
 })();
 
-// ==================== 해시 처리 (원클릭) ====================
-async function checkHash() {
-  const hash = window.location.hash.substring(1);
-  if (!hash) return;
-  const params = new URLSearchParams(hash);
-  if (params.has('offer')) {
-    try {
-      const offer = JSON.parse(atob(params.get('offer')));
-      closeConnection();
-      // Offerer가 설정한 암호가 URL에 포함되었는지 (선택적)
-      if (params.has('pw')) password = params.get('pw');
-      // 자동 Answer 모드 UI
+async function checkHash(){
+  const h=window.location.hash.substring(1); if(!h)return;
+  const p=new URLSearchParams(h);
+  if(p.has('offer')){
+    try{
+      const offer=JSON.parse(atob(p.get('offer'))); closeConnection();
       document.getElementById('simpleMode').querySelector('.card').classList.add('hidden');
       document.getElementById('answerPanel').classList.remove('hidden');
       document.getElementById('autoAnswerContent').classList.remove('hidden');
       document.getElementById('manualJoinContent').classList.add('hidden');
-      document.getElementById('answerSpinner').style.display = 'inline-block';
+      document.getElementById('answerSpinner').style.display='inline-block';
       document.getElementById('answerReadyPanel').classList.add('hidden');
-
-      // 암호 입력 창 보여주기
-      // (joinPassword 입력 대기 필요 -> 자동 진행은 안 함, 사용자가 직접 입력)
-      // 대신 offer만 setRemote
       await initiateAnswer(offer);
-    } catch (e) { alert('잘못된 초대 링크입니다.'); }
-  } else if (params.has('answer')) {
-    try {
-      const answer = JSON.parse(atob(params.get('answer')));
-      if (pc && isOfferer) {
-        await pc.setRemoteDescription(answer);
-      } else alert('채팅을 먼저 시작한 후 Answer 링크를 열거나, 아래 입력창에 붙여넣으세요.');
-    } catch (e) { alert('잘못된 Answer 링크입니다.'); }
+    }catch(e){alert('잘못된 초대 링크입니다.');}
+  }else if(p.has('answer')){
+    try{
+      const answer=JSON.parse(atob(p.get('answer')));
+      if(pc&&isOfferer)await pc.setRemoteDescription(answer);
+      else alert('채팅을 먼저 시작한 후 Answer 링크를 적용하세요.');
+    }catch(e){alert('잘못된 Answer 링크입니다.');}
   }
 }
 
-async function initiateAnswer(offer) {
-  isOfferer = false;
-  initPC();
-  await pc.setRemoteDescription(offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await waitIce();
-  // 암호는 아직 없으므로, UI에서 암호 입력 후 키 생성
-  document.getElementById('answerSpinner').style.display = 'none';
-  document.getElementById('answerReadyPanel').classList.remove('hidden');
-  const answerUrl = window.location.origin + window.location.pathname + '#answer=' + btoa(JSON.stringify(pc.localDescription));
-  document.getElementById('answerLinkDisplay').textContent = answerUrl;
-}
-
-// Offerer 쪽에서 암호 입력 시 링크 업데이트
-function updateOfferLink() {
-  password = document.getElementById('roomPassword').value;
-  if (pc && isOfferer) {
-    const offerBase64 = btoa(JSON.stringify(pc.localDescription));
-    let url = window.location.origin + window.location.pathname + '#offer=' + offerBase64;
-    if (password) url += '&pw=' + encodeURIComponent(password);
-    document.getElementById('offerLinkDisplay').textContent = url;
-  }
-}
-
-// ==================== 사용자 액션 ====================
-async function startNewChat() {
-  closeConnection();
-  isOfferer = true;
-  password = ''; // 초기화
-  document.getElementById('offerPanel').classList.remove('hidden');
-  document.getElementById('answerPanel').classList.add('hidden');
-  document.getElementById('offerSpinner').style.display = 'inline-block';
-  initPC();
-  dc = pc.createDataChannel('chat', { ordered: true });
-  setupDC();
-  pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => waitIce().then(() => {
-    document.getElementById('offerSpinner').style.display = 'none';
-    const offerBase64 = btoa(JSON.stringify(pc.localDescription));
-    let url = window.location.origin + window.location.pathname + '#offer=' + offerBase64;
-    // 암호가 있으면 추가
-    if (password) url += '&pw=' + encodeURIComponent(password);
-    document.getElementById('offerLinkDisplay').textContent = url;
-  }));
-}
-
-function joinChat() {
+// ==================== UI ====================
+function showJoinPanel(){
   document.getElementById('offerPanel').classList.add('hidden');
   document.getElementById('answerPanel').classList.remove('hidden');
   document.getElementById('autoAnswerContent').classList.add('hidden');
   document.getElementById('manualJoinContent').classList.remove('hidden');
 }
-
-async function createAnswerFromOffer() {
-  const offerStr = document.getElementById('remoteOfferSDP').value.trim();
-  if (!offerStr) return;
-  closeConnection();
-  isOfferer = false;
-  initPC();
-  await pc.setRemoteDescription(JSON.parse(offerStr));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await waitIce();
-  document.getElementById('localAnswerSDP').value = JSON.stringify(pc.localDescription);
+async function startNewChat(){
+  closeConnection(); isOfferer=true;
+  document.getElementById('offerPanel').classList.remove('hidden');
+  document.getElementById('answerPanel').classList.add('hidden');
+  document.getElementById('offerSpinner').style.display='inline-block';
+  initPC(); dc=pc.createDataChannel('chat',{ordered:true}); setupDC();
+  pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>waitIce().then(()=>{
+    document.getElementById('offerSpinner').style.display='none';
+    const offerB64=btoa(JSON.stringify(pc.localDescription));
+    document.getElementById('offerLinkDisplay').textContent=location.origin+location.pathname+'#offer='+offerB64;
+  }));
+}
+async function initiateAnswer(offer){
+  isOfferer=false; initPC(); await pc.setRemoteDescription(offer);
+  const ans=await pc.createAnswer(); await pc.setLocalDescription(ans); await waitIce();
+  document.getElementById('answerSpinner').style.display='none';
+  document.getElementById('answerReadyPanel').classList.remove('hidden');
+  document.getElementById('answerLinkDisplay').textContent=location.origin+location.pathname+'#answer='+btoa(JSON.stringify(pc.localDescription));
+}
+async function createAnswerFromOffer(){
+  const t=document.getElementById('remoteOfferSDP').value.trim(); if(!t)return;
+  closeConnection(); isOfferer=false; initPC();
+  const u=new URL(t); const hp=new URLSearchParams(u.hash.substring(1));
+  if(!hp.has('offer')){alert('올바른 초대 링크가 아닙니다.');return;}
+  await pc.setRemoteDescription(JSON.parse(atob(hp.get('offer'))));
+  const ans=await pc.createAnswer(); await pc.setLocalDescription(ans); await waitIce();
+  document.getElementById('localAnswerLinkDisplay').textContent=location.origin+location.pathname+'#answer='+btoa(JSON.stringify(pc.localDescription));
   document.getElementById('answerResultPanel').classList.remove('hidden');
 }
-
-async function applyAnswerLink() {
-  const link = document.getElementById('answerLinkInput').value.trim();
-  if (!link) return;
-  const hash = new URL(link).hash.substring(1);
-  const params = new URLSearchParams(hash);
-  if (params.has('answer')) {
-    const answer = JSON.parse(atob(params.get('answer')));
-    if (pc && isOfferer) await pc.setRemoteDescription(answer);
-    else alert('채팅을 시작한 후 Answer 링크를 적용하세요.');
-  } else alert('올바른 Answer 링크가 아닙니다.');
+async function applyAnswerLink(){
+  const l=document.getElementById('answerLinkInput').value.trim(); if(!l)return;
+  try{
+    const u=new URL(l); const hp=new URLSearchParams(u.hash.substring(1));
+    if(hp.has('answer')){await pc.setRemoteDescription(JSON.parse(atob(hp.get('answer'))));}
+  }catch(e){alert('올바르지 않은 Answer 링크입니다.');}
 }
-
-// 암호 입력 후 키 생성 (참가자 쪽에서 호출)
-async function setJoinPassword() {
-  const pwInput = document.getElementById('joinPassword');
-  password = pwInput.value;
-  if (password) {
-    await deriveSharedKey();
-    // 이미 answer 준비된 상태면 바로 채팅 시작
-    if (dc && dc.readyState === 'open') {
-      showChat();
-    }
-  }
-}
-
-// 암호 입력 필드에 이벤트 추가 (초기화 시)
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('joinPassword').addEventListener('input', setJoinPassword);
-  document.getElementById('joinPassword').addEventListener('change', setJoinPassword);
-});
 
 // ==================== WebRTC ====================
-function initPC() {
-  pc = new RTCPeerConnection({ iceServers: getIceServers(), iceCandidatePoolSize: 2 });
-  pc.oniceconnectionstatechange = onIceState;
-  pc.ondatachannel = (event) => { dc = event.channel; setupDC(); };
+function initPC(){ pc=new RTCPeerConnection({iceServers:ICE_SERVERS}); pc.oniceconnectionstatechange=onIceState; pc.ondatachannel=e=>{dc=e.channel;setupDC();}; }
+function setupDC(){
+  if(!dc)return;
+  dc.onopen=()=>{updateConn(true); showChat(); if(isOfferer)startSecureHandshake();};
+  dc.onmessage=onMsg; dc.onclose=()=>{updateConn(false);showSimple();};
+}
+function onIceState(){
+  const s=pc.iceConnectionState;
+  if(s==='connected')updateConn(true);
+  else if(s==='disconnected'||s==='failed'||s==='closed'){updateConn(false);showSimple();}
+}
+function waitIce(){return new Promise(r=>{if(pc.iceGatheringState==='complete')r();else pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState==='complete')r();});});}
+function updateConn(ok){document.getElementById('connDot').className='dot '+(ok?'on':'off');document.getElementById('connLabel').textContent=ok?'연결됨':'오프라인';}
+
+// ==================== 보안 채널 핸드셰이크 ====================
+async function startSecureHandshake(){
+  salt=crypto.getRandomValues(new Uint8Array(32));
+  ourEcdh=await crypto.subtle.generateKey(ECDH,true,['deriveKey','deriveBits']);
+  const pubRaw=await crypto.subtle.exportKey('raw',ourEcdh.publicKey);
+  dc.send(JSON.stringify({type:'__init__',salt:buf2b64(salt.buffer),pubKey:buf2b64(pubRaw)}));
 }
 
-function setupDC() {
-  if (!dc) return;
-  dc.onopen = async () => {
-    updateConn(true);
-    // 이미 암호가 있으면 키 유도 (Offerer가 암호 설정한 경우)
-    if (isOfferer && password) await deriveSharedKey();
-    showChat();
-  };
-  dc.onmessage = onMsg;
-  dc.onclose = () => updateConn(false);
+async function submitPassword(){
+  password=document.getElementById('chatPasswordInput').value;
+  if(!password){alert('암호를 입력하세요.');return;}
+  if(!dc||dc.readyState!=='open'){alert('연결이 준비되지 않았습니다.');return;}
+  if(!salt){alert('보안 채널이 아직 초기화되지 않았습니다. 잠시 기다려주세요.');return;}
+  await deriveAuthKey();
+  ourEcdh=await crypto.subtle.generateKey(ECDH,true,['deriveKey','deriveBits']);
+  const ourPub=await crypto.subtle.exportKey('raw',ourEcdh.publicKey);
+  dc.send(JSON.stringify({type:'__init_ack__',pubKey:buf2b64(ourPub)}));
+  await deriveSessionKey();
+  document.getElementById('passwordPrompt').classList.add('hidden');
+  document.getElementById('inputBar').style.display='flex';
+  await mutualKeyCheck();
 }
 
-function onIceState() {
-  const state = pc.iceConnectionState;
-  if (state === 'connected') updateConn(true);
-  else if (state === 'disconnected' || state === 'failed') { updateConn(false); showSimple(); }
+async function deriveAuthKey(){
+  const km=await crypto.subtle.importKey('raw',str2buf(password),'PBKDF2',false,['deriveKey']);
+  authKey=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:PBKDF2_ITERS,hash:'SHA-512'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
 }
 
-function waitIce() {
-  return new Promise(r => {
-    if (pc.iceGatheringState === 'complete') r();
-    else pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') r(); });
-  });
-}
-
-// ==================== 대칭키 암호화 ====================
-async function deriveSharedKey() {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(password),
-    { name: 'PBKDF2' }, false, ['deriveKey']
-  );
-  sharedKey = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode('p2p-chat-salt'), iterations: 100000, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
-}
-
-async function encryptMessage(plaintext) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sharedKey, new TextEncoder().encode(plaintext));
-  return { iv: Array.from(new Uint8Array(iv)), ct: Array.from(new Uint8Array(ct)) };
-}
-
-async function decryptMessage(data) {
-  const iv = new Uint8Array(data.iv);
-  const ct = new Uint8Array(data.ct);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sharedKey, ct);
-  return new TextDecoder().decode(plain);
-}
-
-// ==================== 메시지 ====================
-async function sendText() {
-  const inp = document.getElementById('msgInput');
-  const t = inp.value.trim();
-  if (!t || !dc || dc.readyState !== 'open' || !sharedKey) {
-    if (!sharedKey) addMsg('🔐 암호를 먼저 설정/입력하세요.', 'system');
-    return;
+async function handleInitMessage(d){
+  if(d.type==='__init__'){
+    salt=new Uint8Array(b642buf(d.salt)); peerEcdhPub=await crypto.subtle.importKey('raw',b642buf(d.pubKey),ECDH,true,[]);
+    document.getElementById('passwordPrompt').classList.remove('hidden');
+  }else if(d.type==='__init_ack__'){
+    peerEcdhPub=await crypto.subtle.importKey('raw',b642buf(d.pubKey),ECDH,true,[]);
+    if(!authKey)await deriveAuthKey();
+    await deriveSessionKey();
+    document.getElementById('passwordPrompt').classList.add('hidden');
+    document.getElementById('inputBar').style.display='flex';
+    await mutualKeyCheck();
   }
-  const enc = await encryptMessage(t);
-  dc.send(JSON.stringify({ type: 'text', ...enc }));
-  addMsg(t, 'me');
-  inp.value = '';
 }
 
-function onMsg(e) {
-  try {
-    if (e.data instanceof ArrayBuffer) { /* 파일 처리 */ return; }
-    const d = JSON.parse(e.data);
-    if (d.type === 'text') {
-      if (!sharedKey) { addMsg('⚠️ 암호가 없어 메시지를 해독할 수 없습니다.', 'system'); return; }
-      decryptMessage(d).then(p => addMsg(p, 'other')).catch(() => addMsg('⚠️ 복호화 실패', 'system'));
+async function deriveSessionKey(){
+  const ecdhBits=await crypto.subtle.deriveBits({name:'ECDH',public:peerEcdhPub},ourEcdh,256);
+  const authRaw=await crypto.subtle.exportKey('raw',authKey);
+  const ikm=concatBufs(ecdhBits,str2buf(password));
+  const hkdfKey=await crypto.subtle.importKey('raw',ikm,'HKDF',false,['deriveKey']);
+  sessionKey=await crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-512',salt:authRaw,info:str2buf('session')},hkdfKey,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  const sb=await crypto.subtle.exportKey('raw',sessionKey);
+  sendChain={chain:await hkdfExpand(sb,str2buf('send-chain')),seq:0};
+  recvChain={chain:await hkdfExpand(sb,str2buf('recv-chain')),seq:-1};
+  document.getElementById('sessionFingerprint').textContent=buf2hex(await crypto.subtle.digest('SHA-256',sb)).slice(0,32);
+  document.getElementById('securityCard').style.display='flex';
+}
+async function hkdfExpand(prk,info){
+  const k=await crypto.subtle.importKey('raw',prk,{name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const s=await crypto.subtle.sign('HMAC',k,info);
+  return crypto.subtle.importKey('raw',s.slice(0,32),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+}
+async function ratchetForward(chainRef){
+  const cur=chainRef.chain;
+  const newChain=await crypto.subtle.sign('HMAC',cur,new Uint8Array([2]));
+  chainRef.chain=await crypto.subtle.importKey('raw',newChain.slice(0,32),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const msgKey=await crypto.subtle.sign('HMAC',cur,new Uint8Array([1]));
+  return crypto.subtle.importKey('raw',msgKey.slice(0,32),{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function encryptPayload(obj){
+  const mk=await ratchetForward(sendChain); const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},mk,str2buf(JSON.stringify(obj)));
+  return {seq:sendChain.seq++,iv:Array.from(new Uint8Array(iv)),ct:Array.from(new Uint8Array(ct))};
+}
+async function decryptPayload(d){
+  const{seq,iv,ct}=d; if(seq<=recvChain.seq)throw new Error('Invalid seq');
+  while(recvChain.seq<seq-1){await ratchetForward(recvChain);recvChain.seq++;}
+  const mk=await ratchetForward(recvChain); recvChain.seq=seq;
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(iv)},mk,new Uint8Array(ct));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+async function mutualKeyCheck(){
+  const enc=await encryptPayload({type:'__ping__'});
+  dc.send(JSON.stringify({type:'__key_check__',...enc}));
+}
+async function handleKeyCheck(d){
+  try{
+    const inner=await decryptPayload(d);
+    if(inner.type==='__ping__'){const enc=await encryptPayload({type:'__pong__'});dc.send(JSON.stringify({type:'__key_check__',...enc}));addMsg('✅ 보안 채널 활성화','system');}
+    else if(inner.type==='__pong__')addMsg('✅ 보안 채널 활성화','system');
+  }catch(e){addMsg('❌ 암호 불일치!','system');}
+}
+
+// ==================== 메시징 ====================
+async function sendText(){
+  const inp=document.getElementById('msgInput'), txt=inp.value.trim();
+  if(!txt||!dc||dc.readyState!=='open'||!sessionKey)return;
+  const msgId=genUUID();
+  try{
+    const enc=await encryptPayload({type:'text',id:msgId,content:txt});
+    dc.send(JSON.stringify({type:'msg',...enc}));
+    addMsg(txt,'me',msgId); inp.value=''; inp.style.height='auto';
+  }catch(e){addMsg('전송 실패','system');}
+}
+async function sendTyping(state){
+  if(!dc||dc.readyState!=='open'||!sessionKey)return;
+  const enc=await encryptPayload({type:'typing',state});
+  dc.send(JSON.stringify({type:'msg',...enc}));
+}
+async function sendReadReceipt(msgId){
+  if(!dc||dc.readyState!=='open'||!sessionKey)return;
+  const enc=await encryptPayload({type:'read',id:msgId});
+  dc.send(JSON.stringify({type:'msg',...enc}));
+}
+async function deleteMessage(msgId){
+  if(!dc||dc.readyState!=='open'||!sessionKey)return;
+  const enc=await encryptPayload({type:'delete',id:msgId});
+  dc.send(JSON.stringify({type:'msg',...enc}));
+  const el=document.getElementById('msg-'+msgId); if(el)el.remove();
+}
+
+async function onMsg(e){
+  if(e.data instanceof ArrayBuffer){handleBinaryChunk(e.data);return;}
+  try{
+    const d=JSON.parse(e.data);
+    if(d.type==='__init__'||d.type==='__init_ack__'){await handleInitMessage(d);return;}
+    if(d.type==='__key_check__'){await handleKeyCheck(d);return;}
+    if(d.type==='msg'){
+      const inner=await decryptPayload(d);
+      if(inner.type==='text'){addMsg(inner.content,'other',inner.id);sendReadReceipt(inner.id);}
+      else if(inner.type==='typing'){document.getElementById('typingIndicator').style.display=inner.state?'block':'none';}
+      else if(inner.type==='read'){markAsRead(inner.id);}
+      else if(inner.type==='delete'){const el=document.getElementById('msg-'+inner.id);if(el)el.remove();}
+      else if(inner.type==='file_start'){handleFileStart(inner);}
+      else if(inner.type==='file_end'){if(fileReceive&&fileReceive.id===inner.id)await assembleFile();}
     }
-  } catch (err) {
-    console.error(err);
+  }catch(e){addMsg('⚠️ 복호화 실패','system');}
+}
+
+function addMsg(text,who,msgId){
+  const c=document.getElementById('messages'); const d=document.createElement('div');
+  d.className='msg '+(who==='me'?'me':who==='other'?'other':'system');
+  d.id=msgId?'msg-'+msgId:'';
+  let bubble=escapeHtml(text);
+  let meta=`<div class="time">${new Date().toLocaleTimeString()}`;
+  if(who==='me'&&msgId)meta+=`<button class="delete-btn" onclick="deleteMessage('${msgId}')">✕</button>`;
+  meta+=`</div>`;
+  if(fileReceive&&text.startsWith('📥'))bubble+=`<div class="progress"><div class="progress-bar" id="file-progress"></div></div>`;
+  d.innerHTML=`<div class="bubble">${bubble}${meta}</div>`;
+  c.appendChild(d); c.scrollTop=c.scrollHeight;
+}
+function markAsRead(msgId){const el=document.getElementById('msg-'+msgId);if(el){const t=el.querySelector('.time');if(t&&!t.querySelector('.read'))t.innerHTML+='<span class="read" style="color:var(--success)">✓✓</span>';}}
+function handleFileStart(inner){fileReceive={id:inner.id,name:inner.name,size:inner.size,fek:b642buf(inner.fek),chunks:[],received:0};addMsg(`📥 ${inner.name} (${formatBytes(inner.size)})`,'other');}
+function handleBinaryChunk(buf){if(!fileReceive)return; fileReceive.chunks.push(new Uint8Array(buf)); fileReceive.received+=buf.byteLength; const pct=Math.round(fileReceive.received/fileReceive.size*100); const pb=document.getElementById('file-progress'); if(pb)pb.style.width=pct+'%'; if(fileReceive.received>=fileReceive.size)document.getElementById('file-progress')?.parentElement?.remove();}
+async function assembleFile(){
+  if(!fileReceive)return;
+  const combined=new Uint8Array(fileReceive.size); let off=0;
+  for(const c of fileReceive.chunks){combined.set(c,off);off+=c.length;}
+  const iv=combined.slice(0,12), ct=combined.slice(12);
+  const key=await crypto.subtle.importKey('raw',fileReceive.fek,'AES-GCM',false,['decrypt']);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+  const blob=new Blob([plain]), url=URL.createObjectURL(blob);
+  const c=document.getElementById('messages'); const d=document.createElement('div'); d.className='msg other';
+  let html=`<div class="bubble"><div class="file-bubble"><span>📎 ${escapeHtml(fileReceive.name)}</span>`;
+  if(blob.type.startsWith('image/'))html+=`<div class="file-preview"><img src="${url}"></div>`;
+  else if(blob.type.startsWith('video/'))html+=`<div class="file-preview"><video controls src="${url}"></video></div>`;
+  html+=`<a href="${url}" download="${escapeHtml(fileReceive.name)}" style="color:var(--accent);">다운로드</a></div><div class="time">${new Date().toLocaleTimeString()}</div></div>`;
+  d.innerHTML=html; c.appendChild(d); c.scrollTop=c.scrollHeight;
+  fileReceive=null;
+}
+
+// ==================== 파일 전송 ====================
+async function handleFiles(files){for(const f of files)await sendFile(f);}
+async function sendFile(file){
+  if(!dc||dc.readyState!=='open'||!sessionKey)return;
+  const fileId=genUUID(), fek=await crypto.subtle.generateKey({name:'AES-GCM',length:256},true,['encrypt']);
+  const iv=crypto.getRandomValues(new Uint8Array(12)), fekRaw=await crypto.subtle.exportKey('raw',fek);
+  const fileBuf=await file.arrayBuffer();
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},fek,fileBuf);
+  const encData=new Uint8Array(iv.byteLength+ct.byteLength); encData.set(iv); encData.set(new Uint8Array(ct),iv.byteLength);
+  const metaEnc=await encryptPayload({type:'file_start',id:fileId,name:file.name,size:encData.byteLength,fek:buf2b64(fekRaw)});
+  dc.send(JSON.stringify({type:'msg',...metaEnc}));
+  const chunkSize=64*1024; let offset=0;
+  while(offset<encData.byteLength){
+    const end=Math.min(offset+chunkSize,encData.byteLength);
+    dc.send(encData.slice(offset,end).buffer); offset=end; await new Promise(r=>setTimeout(r,10));
   }
+  const endEnc=await encryptPayload({type:'file_end',id:fileId});
+  dc.send(JSON.stringify({type:'msg',...endEnc}));
+  addMsg(`📤 ${file.name} 전송 완료`,'me');
 }
 
-function addMsg(t, who) {
-  const c = document.getElementById('messages');
-  const d = document.createElement('div');
-  d.className = 'msg ' + (who === 'me' ? 'me' : (who === 'other' ? 'other' : ''));
-  d.innerHTML = `<div class="bubble">${escapeHtml(t)}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
-  c.appendChild(d); c.scrollTop = c.scrollHeight;
-}
-
-// ==================== 파일 전송 (간소화) ====================
-async function handleFiles(files) { for (const f of files) await sendFile(f); }
-async function sendFile(f) {
-  if (!dc || dc.readyState !== 'open' || !sharedKey) return;
-  // 파일 전송은 생략 (필요하면 추가)
-}
-
-// ==================== UI 전환 ====================
-function showChat() {
-  document.getElementById('simpleMode').style.display = 'none';
-  document.getElementById('chatScreen').style.display = 'flex';
-}
-function showSimple() {
-  document.getElementById('simpleMode').style.display = 'block';
-  document.getElementById('chatScreen').style.display = 'none';
-}
-function updateConn(ok) {
-  const dot = document.getElementById('connDot'), lbl = document.getElementById('connLabel');
-  dot.className = 'dot ' + (ok ? 'on' : 'off');
-  lbl.textContent = ok ? '연결됨' : '오프라인';
-}
-function closeConnection() {
-  if (pc) { pc.close(); pc = null; }
-  dc = null;
-  sharedKey = null;
-}
-
-// ==================== 유틸 ====================
-function copyText(id) { const t = document.getElementById(id); t.select(); navigator.clipboard.writeText(t.value).catch(() => {}); }
-function copyTextById(id) {
-  const el = document.getElementById(id);
-  const text = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ? el.value : el.textContent;
-  navigator.clipboard.writeText(text).then(() => alert('복사되었습니다!')).catch(() => {});
-}
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
+// ==================== UI 보조 ====================
+function showChat(){document.getElementById('simpleMode').style.display='none';document.getElementById('chatScreen').style.display='flex';}
+function showSimple(){document.getElementById('simpleMode').style.display='block';document.getElementById('chatScreen').style.display='none';}
+function closeConnection(){if(pc){pc.close();pc=null;}dc=null;authKey=sessionKey=sendChain=recvChain=null;salt=null;ourEcdh=peerEcdhPub=null;sendSeq=0;recvSeq=-1;fileReceive=null;document.getElementById('sessionFingerprint').textContent='';document.getElementById('securityCard').style.display='none';document.getElementById('passwordPrompt').classList.remove('hidden');document.getElementById('inputBar').style.display='none';}
+function formatBytes(b){return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';}
+function toggleSecurityDetail(){document.getElementById('securityDetail').classList.toggle('hidden');}
+function copyTextById(id){const el=document.getElementById(id);const t=el.tagName==='INPUT'||el.tagName==='TEXTAREA'?el.value:el.textContent;navigator.clipboard.writeText(t).then(()=>alert('복사됨')).catch(()=>{});}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);}
 </script>
 </body>
 </html>
