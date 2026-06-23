@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0, minimum-scale=1.0">
-  <title>P2P 암호 채팅 – 완벽 최종판</title>
+  <title>P2P 암호 채팅 – 최종 완전판</title>
   <style>
     :root {
       --bg: #06090f; --surface: #0f141e; --card: rgba(15,20,30,0.9);
@@ -202,7 +202,8 @@ const genUUID = () => crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4
 // ==================== 전역 상태 ====================
 let pc, dc, isOfferer = false, password = null;
 let authKey, sessionKey, sendChain, recvChain;
-let ourEcdh, peerEcdhPub;
+let ourEcdhPair = null;  // { privateKey, publicKey }
+let peerEcdhPub = null;
 let salt;
 const ECDH={name:'ECDH',namedCurve:'P-256'};
 const PBKDF2_ITERS=600000;
@@ -310,8 +311,9 @@ function updateConn(ok){document.getElementById('connDot').className='dot '+(ok?
 // ==================== ECDH 교환 (비밀번호 없이 먼저) ====================
 async function startEcdhExchange(){
   try {
-    ourEcdh = await crypto.subtle.generateKey(ECDH, true, ['deriveKey','deriveBits']);
-    const pubRaw = await crypto.subtle.exportKey('raw', ourEcdh.publicKey);
+    const keyPair = await crypto.subtle.generateKey(ECDH, true, ['deriveKey','deriveBits']);
+    ourEcdhPair = { privateKey: keyPair.privateKey, publicKey: keyPair.publicKey };
+    const pubRaw = await crypto.subtle.exportKey('raw', ourEcdhPair.publicKey);
     if (isOfferer) {
       salt = crypto.getRandomValues(new Uint8Array(32));
       dc.send(JSON.stringify({type:'__ecdhe__', salt:buf2b64(salt.buffer), pubKey:buf2b64(pubRaw)}));
@@ -330,7 +332,7 @@ async function handleEcdheMessage(data){
     }
     peerEcdhPub = await crypto.subtle.importKey('raw', b642buf(data.pubKey), ECDH, true, []);
     // 이미 암호가 입력되어 있다면 즉시 세션 키 유도
-    if (password && ourEcdh && peerEcdhPub && salt) {
+    if (password && ourEcdhPair && peerEcdhPub && salt) {
       await deriveSessionKey();
     }
   } catch(e) {
@@ -349,7 +351,7 @@ async function submitPassword(){
     errorEl.style.display = 'block';
     return;
   }
-  if (!salt || !ourEcdh || !peerEcdhPub) {
+  if (!salt || !ourEcdhPair || !peerEcdhPub) {
     errorEl.textContent = '아직 상대방과의 보안 연결이 준비되지 않았습니다. 잠시 후 다시 시도하세요.';
     errorEl.style.display = 'block';
     return;
@@ -378,7 +380,8 @@ async function deriveAuthKey(){
 }
 
 async function deriveSessionKey(){
-  const ecdhBits = await crypto.subtle.deriveBits({ name:'ECDH', public:peerEcdhPub }, ourEcdh, 256);
+  // ★ 수정: ourEcdhPair.privateKey 사용
+  const ecdhBits = await crypto.subtle.deriveBits({ name:'ECDH', public:peerEcdhPub }, ourEcdhPair.privateKey, 256);
   const authRaw = await crypto.subtle.exportKey('raw', authKey);
   const ikm = concatBufs(ecdhBits, str2buf(password));
   const hkdfKey = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveKey']);
@@ -629,7 +632,7 @@ function showSimple() {
 function closeConnection() {
   if (pc) { pc.close(); pc = null; }
   dc = null; authKey = sessionKey = null; sendChain = recvChain = null;
-  salt = null; ourEcdh = peerEcdhPub = null; fileReceive = null;
+  salt = null; ourEcdhPair = null; peerEcdhPub = null; fileReceive = null;
   password = null;
   document.getElementById('sessionFingerprint').textContent = '';
   document.getElementById('securityCard').style.display = 'none';
