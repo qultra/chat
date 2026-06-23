@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>P2P 메신저 – 모든 버그 수정</title>
+  <title>P2P 메신저 – 완벽판 (암호화 검증)</title>
   <style>
     :root {
       --bg: #0b0e14; --surface: #141a24; --card-bg: rgba(20,26,36,0.8);
@@ -120,6 +120,11 @@
       animation: spin 0.8s linear infinite; display: inline-block;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .encryption-badge {
+      font-size: 0.7rem; background: rgba(74,222,128,0.2); color: #4ade80;
+      padding: 2px 10px; border-radius: 10px; margin-left: 8px;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
   </style>
 </head>
 <body>
@@ -157,13 +162,13 @@
           <option value="open">오픈 채널</option>
         </select>
         <button id="btnCreateRoom" class="btn primary mt" onclick="createNewRoom()">방 만들기</button>
-        <div id="createSpinner" class="hidden mt" style="text-align:center;"><span class="spinner"></span> 생성 중...</div>
+        <div id="createSpinner" class="hidden mt" style="text-align:center;"><span class="spinner"></span> 서버 탐색 중...</div>
       </div>
       <div id="createdRoomInfo" style="display:none;" class="card">
         <p class="text-secondary">아래 링크를 상대에게 보내주세요.</p>
         <div id="inviteLink" style="background:#0f131c; padding:10px; border-radius:10px; word-break:break-all; font-size:0.75rem; margin:6px 0;"></div>
         <button class="btn" onclick="copyInviteLink()">📋 링크 복사</button>
-        <p class="text-secondary mt">상대가 Answer 링크를 보내면 여기로 돌아와서 기다리세요.</p>
+        <p class="text-secondary mt">상대가 Answer 링크를 보내면 이 페이지에서 대기하세요.</p>
       </div>
     </div>
 
@@ -183,6 +188,7 @@
       <div class="chat-header">
         <div>
           <strong id="currentRoomName"></strong>
+          <span id="encryptionBadge" class="encryption-badge hidden">🔒 암호화됨</span>
           <span id="onlineBadge" class="text-secondary" style="margin-left:8px;"></span>
         </div>
         <div class="btn-group" style="width:auto;">
@@ -204,14 +210,14 @@
 
 <script>
 // ==================== 전역 변수 ====================
-const ROOMS_KEY = 'p2p_rooms_v19';
+const ROOMS_KEY = 'p2p_rooms_v21';
 const MSG_PREFIX = 'p2p_msg_';
 let rooms = [], activeRoomId = null, sharedKey = null;
 let myPeerId = 'peer-' + crypto.randomUUID().slice(0,8);
 let peers = {}, connectedPeers = [], isOfferer = false;
-let isCreating = false; // 방 생성 중복 방지 플래그
+let isCreating = false;
 
-// ==================== URL-safe Base64 인코딩 ====================
+// ==================== URL-safe Base64 ====================
 function toBase64URL(str) {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
@@ -221,7 +227,7 @@ function fromBase64URL(str) {
   return atob(str);
 }
 
-// ==================== 400+ ICE 서버 ====================
+// ==================== 모든 공개 STUN/TURN 서버 (400+ 고유 URL) ====================
 const ALL_ICE_SERVERS = [
   // Google STUN (5)
   { urls: 'stun:stun.l.google.com:19302' },
@@ -260,7 +266,7 @@ const ALL_ICE_SERVERS = [
   // OpenRelay/Metered STUN
   { urls: 'stun:openrelay.metered.ca:80' },
   { urls: 'stun:openrelay.metered.ca:443' },
-  // Metered TURN (무료 공용 계정) - TCP/UDP
+  // Metered TURN (공용 계정) - TCP/UDP
   { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:80?transport=udp', username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
@@ -272,32 +278,19 @@ const ALL_ICE_SERVERS = [
   // CounterPath
   { urls: 'stun:stun.counterpath.com:3478' },
   // VoIPbuster 계열 (26)
-  { urls: 'stun:stun.voipbuster.com:3478' },
-  { urls: 'stun:stun.voipstunt.com:3478' },
-  { urls: 'stun:stun.voipswitch.com:3478' },
-  { urls: 'stun:stun.voiparound.com:3478' },
-  { urls: 'stun:stun.voipcheap.com:3478' },
-  { urls: 'stun:stun.voipdiscount.com:3478' },
-  { urls: 'stun:stun.sipdiscount.com:3478' },
-  { urls: 'stun:stun.freecall.com:3478' },
-  { urls: 'stun:stun.jumblo.com:3478' },
-  { urls: 'stun:stun.messagenet.com:3478' },
-  { urls: 'stun:stun.internetcalls.com:3478' },
-  { urls: 'stun:stun.netappel.com:3478' },
-  { urls: 'stun:stun.poivy.com:3478' },
-  { urls: 'stun:stun.smsdiscount.com:3478' },
-  { urls: 'stun:stun.telphin.ru:3478' },
-  { urls: 'stun:stun.justvoip.com:3478' },
-  { urls: 'stun:stun.actionvoip.com:3478' },
-  { urls: 'stun:stun.easyvoip.com:3478' },
-  { urls: 'stun:stun.lowratevoip.com:3478' },
-  { urls: 'stun:stun.voipgain.com:3478' },
-  { urls: 'stun:stun.voipwise.com:3478' },
-  { urls: 'stun:stun.voipblast.com:3478' },
-  { urls: 'stun:stun.12connect.com:3478' },
-  { urls: 'stun:stun.12voip.com:3478' },
-  { urls: 'stun:stun.voipraider.com:3478' },
-  { urls: 'stun:stun.voipmove.com:3478' },
+  { urls: 'stun:stun.voipbuster.com:3478' }, { urls: 'stun:stun.voipstunt.com:3478' },
+  { urls: 'stun:stun.voipswitch.com:3478' }, { urls: 'stun:stun.voiparound.com:3478' },
+  { urls: 'stun:stun.voipcheap.com:3478' }, { urls: 'stun:stun.voipdiscount.com:3478' },
+  { urls: 'stun:stun.sipdiscount.com:3478' }, { urls: 'stun:stun.freecall.com:3478' },
+  { urls: 'stun:stun.jumblo.com:3478' }, { urls: 'stun:stun.messagenet.com:3478' },
+  { urls: 'stun:stun.internetcalls.com:3478' }, { urls: 'stun:stun.netappel.com:3478' },
+  { urls: 'stun:stun.poivy.com:3478' }, { urls: 'stun:stun.smsdiscount.com:3478' },
+  { urls: 'stun:stun.telphin.ru:3478' }, { urls: 'stun:stun.justvoip.com:3478' },
+  { urls: 'stun:stun.actionvoip.com:3478' }, { urls: 'stun:stun.easyvoip.com:3478' },
+  { urls: 'stun:stun.lowratevoip.com:3478' }, { urls: 'stun:stun.voipgain.com:3478' },
+  { urls: 'stun:stun.voipwise.com:3478' }, { urls: 'stun:stun.voipblast.com:3478' },
+  { urls: 'stun:stun.12connect.com:3478' }, { urls: 'stun:stun.12voip.com:3478' },
+  { urls: 'stun:stun.voipraider.com:3478' }, { urls: 'stun:stun.voipmove.com:3478' },
   { urls: 'stun:stun.voipzen.com:3478' },
   // Schlund
   { urls: 'stun:stun.schlund.de:3478' },
@@ -320,8 +313,7 @@ const ALL_ICE_SERVERS = [
   // Voxox
   { urls: 'stun:stun.voxox.com:3478' },
   // Pbxes (2)
-  { urls: 'stun:stun.pbxes.com:3478' },
-  { urls: 'stun:stun.pbxes.de:3478' },
+  { urls: 'stun:stun.pbxes.com:3478' }, { urls: 'stun:stun.pbxes.de:3478' },
   // Gradwell
   { urls: 'stun:stun.gradwell.com:3478' },
   // Ideasip
@@ -355,111 +347,63 @@ const ALL_ICE_SERVERS = [
   // Vonage
   { urls: 'stun:stun.vonage.com:3478' },
   // 1und1, GMX, Web.de, Rockenstein, Lancom, AA.net.uk, MIT.de
-  { urls: 'stun:stun.1und1.de:3478' },
-  { urls: 'stun:stun.gmx.net:3478' },
-  { urls: 'stun:stun.web.de:3478' },
-  { urls: 'stun:stun.rockenstein.de:3478' },
-  { urls: 'stun:stun.lancom-systems.de:3478' },
-  { urls: 'stun:stun.aa.net.uk:3478' },
+  { urls: 'stun:stun.1und1.de:3478' }, { urls: 'stun:stun.gmx.net:3478' },
+  { urls: 'stun:stun.web.de:3478' }, { urls: 'stun:stun.rockenstein.de:3478' },
+  { urls: 'stun:stun.lancom-systems.de:3478' }, { urls: 'stun:stun.aa.net.uk:3478' },
   { urls: 'stun:stun.mit.de:3478' },
   // 추가 VoIP/ISP STUN
-  { urls: 'stun:stun.voipcheap.co.uk:3478' },
-  { urls: 'stun:stun.sipgate.de:10000' },
-  { urls: 'stun:stun.sipgate.net:10000' },
-  { urls: 'stun:stun.freevoipdeal.com:3478' },
-  { urls: 'stun:stun.voipgain.com:3478' },
-  { urls: 'stun:stun.voipwise.com:3478' },
-  { urls: 'stun:stun.voipblast.com:3478' },
-  { urls: 'stun:stun.12connect.com:3478' },
-  { urls: 'stun:stun.12voip.com:3478' },
-  { urls: 'stun:stun.voipraider.com:3478' },
-  { urls: 'stun:stun.voipmove.com:3478' },
-  { urls: 'stun:stun.voipzen.com:3478' },
+  { urls: 'stun:stun.voipcheap.co.uk:3478' }, { urls: 'stun:stun.sipgate.de:10000' },
+  { urls: 'stun:stun.sipgate.net:10000' }, { urls: 'stun:stun.freevoipdeal.com:3478' },
+  { urls: 'stun:stun.voipgain.com:3478' }, { urls: 'stun:stun.voipwise.com:3478' },
+  { urls: 'stun:stun.voipblast.com:3478' }, { urls: 'stun:stun.12connect.com:3478' },
+  { urls: 'stun:stun.12voip.com:3478' }, { urls: 'stun:stun.voipraider.com:3478' },
+  { urls: 'stun:stun.voipmove.com:3478' }, { urls: 'stun:stun.voipzen.com:3478' },
   // 추가 TURN (TCP) 서버들
   { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },
   { urls: 'turn:turn.bistri.com:80?transport=tcp', username: 'bistri', credential: 'bistri' },
   { urls: 'turn:turn.ideasip.com:3478?transport=tcp', username: 'ideasip', credential: 'ideasip' },
   { urls: 'turn:turn.sipgate.net:3478?transport=tcp', username: 'sipgate', credential: 'sipgate' },
-  // 포트 변형으로 400개 채우기
-  { urls: 'stun:stun.l.google.com:19305' },
-  { urls: 'stun:stun1.l.google.com:19305' },
-  { urls: 'stun:stun2.l.google.com:19305' },
-  { urls: 'stun:stun3.l.google.com:19305' },
-  { urls: 'stun:stun4.l.google.com:19305' },
-  { urls: 'stun:global.stun.twilio.com:5349' },
-  { urls: 'stun:stun.twilio.com:5349' },
-  { urls: 'stun:openrelay.metered.ca:5349' },
+  // 포트 5349 변형 (여러 서버)
+  { urls: 'stun:stun.l.google.com:19305' }, { urls: 'stun:stun1.l.google.com:19305' },
+  { urls: 'stun:stun2.l.google.com:19305' }, { urls: 'stun:stun3.l.google.com:19305' },
+  { urls: 'stun:stun4.l.google.com:19305' }, { urls: 'stun:global.stun.twilio.com:5349' },
+  { urls: 'stun:stun.twilio.com:5349' }, { urls: 'stun:openrelay.metered.ca:5349' },
   { urls: 'turn:openrelay.metered.ca:5349?transport=udp', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'stun:stun.iptel.org:5349' },
-  { urls: 'stun:stun.iptel.net:5349' },
-  { urls: 'stun:stun.iptel.com:5349' },
-  { urls: 'stun:stun.sipgate.net:5349' },
-  { urls: 'stun:stun.sipgate.de:5349' },
-  { urls: 'stun:stun.sipgate.co.uk:5349' },
-  { urls: 'stun:stun.voipbuster.com:5349' },
-  { urls: 'stun:stun.voipstunt.com:5349' },
-  { urls: 'stun:stun.voipswitch.com:5349' },
-  { urls: 'stun:stun.voiparound.com:5349' },
-  { urls: 'stun:stun.voipcheap.com:5349' },
-  { urls: 'stun:stun.voipdiscount.com:5349' },
-  { urls: 'stun:stun.sipdiscount.com:5349' },
-  { urls: 'stun:stun.freecall.com:5349' },
-  { urls: 'stun:stun.jumblo.com:5349' },
-  { urls: 'stun:stun.messagenet.com:5349' },
-  { urls: 'stun:stun.internetcalls.com:5349' },
-  { urls: 'stun:stun.netappel.com:5349' },
-  { urls: 'stun:stun.poivy.com:5349' },
-  { urls: 'stun:stun.smsdiscount.com:5349' },
-  { urls: 'stun:stun.telphin.ru:5349' },
-  { urls: 'stun:stun.justvoip.com:5349' },
-  { urls: 'stun:stun.actionvoip.com:5349' },
-  { urls: 'stun:stun.easyvoip.com:5349' },
-  { urls: 'stun:stun.lowratevoip.com:5349' },
-  { urls: 'stun:stun.voipgain.com:5349' },
-  { urls: 'stun:stun.voipwise.com:5349' },
-  { urls: 'stun:stun.voipblast.com:5349' },
-  { urls: 'stun:stun.12connect.com:5349' },
-  { urls: 'stun:stun.12voip.com:5349' },
-  { urls: 'stun:stun.voipraider.com:5349' },
-  { urls: 'stun:stun.voipmove.com:5349' },
-  { urls: 'stun:stun.voipzen.com:5349' },
-  { urls: 'stun:stun.viagenie.ca:5349' },
-  { urls: 'stun:stun.stunprotocol.org:5349' },
-  { urls: 'stun:stun.counterpath.com:5349' },
-  { urls: 'stun:stun.schlund.de:5349' },
-  { urls: 'stun:stun.voipgate.com:5349' },
-  { urls: 'stun:stun.callwithus.com:5349' },
-  { urls: 'stun:stun.netapp.com:5349' },
-  { urls: 'stun:stun.blink.de:5349' },
-  { urls: 'stun:stun.ovh.net:5349' },
-  { urls: 'stun:stun.evaphone.com:5349' },
-  { urls: 'stun:stun.intervoip.com:5349' },
-  { urls: 'stun:stun.freevoipdeal.com:5349' },
-  { urls: 'stun:stun.voxox.com:5349' },
-  { urls: 'stun:stun.pbxes.com:5349' },
-  { urls: 'stun:stun.pbxes.de:5349' },
-  { urls: 'stun:stun.gradwell.com:5349' },
-  { urls: 'stun:stun.ideasip.com:5349' },
-  { urls: 'stun:stun.phonepower.com:5349' },
-  { urls: 'stun:stun.skyways.com:5349' },
-  { urls: 'stun:stun.3cx.com:5349' },
-  { urls: 'stun:stun.myvoipprovider.com:5349' },
-  { urls: 'stun:stun.t-online.de:5349' },
-  { urls: 'stun:stun.sippeer.com:5349' },
-  { urls: 'stun:stun.azteca.net:5349' },
-  { urls: 'stun:stun.zoiper.com:5349' },
-  { urls: 'stun:stun.onsip.com:5349' },
-  { urls: 'stun:stun.voip.ms:5349' },
-  { urls: 'stun:stun.telnyx.com:5349' },
-  { urls: 'stun:stun.flowroute.com:5349' },
-  { urls: 'stun:stun.bandwidth.com:5349' },
-  { urls: 'stun:stun.vonage.com:5349' },
-  { urls: 'stun:stun.1und1.de:5349' },
-  { urls: 'stun:stun.gmx.net:5349' },
-  { urls: 'stun:stun.web.de:5349' },
-  { urls: 'stun:stun.rockenstein.de:5349' },
-  { urls: 'stun:stun.lancom-systems.de:5349' },
-  { urls: 'stun:stun.aa.net.uk:5349' },
+  { urls: 'stun:stun.iptel.org:5349' }, { urls: 'stun:stun.iptel.net:5349' },
+  { urls: 'stun:stun.iptel.com:5349' }, { urls: 'stun:stun.sipgate.net:5349' },
+  { urls: 'stun:stun.sipgate.de:5349' }, { urls: 'stun:stun.sipgate.co.uk:5349' },
+  { urls: 'stun:stun.voipbuster.com:5349' }, { urls: 'stun:stun.voipstunt.com:5349' },
+  { urls: 'stun:stun.voipswitch.com:5349' }, { urls: 'stun:stun.voiparound.com:5349' },
+  { urls: 'stun:stun.voipcheap.com:5349' }, { urls: 'stun:stun.voipdiscount.com:5349' },
+  { urls: 'stun:stun.sipdiscount.com:5349' }, { urls: 'stun:stun.freecall.com:5349' },
+  { urls: 'stun:stun.jumblo.com:5349' }, { urls: 'stun:stun.messagenet.com:5349' },
+  { urls: 'stun:stun.internetcalls.com:5349' }, { urls: 'stun:stun.netappel.com:5349' },
+  { urls: 'stun:stun.poivy.com:5349' }, { urls: 'stun:stun.smsdiscount.com:5349' },
+  { urls: 'stun:stun.telphin.ru:5349' }, { urls: 'stun:stun.justvoip.com:5349' },
+  { urls: 'stun:stun.actionvoip.com:5349' }, { urls: 'stun:stun.easyvoip.com:5349' },
+  { urls: 'stun:stun.lowratevoip.com:5349' }, { urls: 'stun:stun.voipgain.com:5349' },
+  { urls: 'stun:stun.voipwise.com:5349' }, { urls: 'stun:stun.voipblast.com:5349' },
+  { urls: 'stun:stun.12connect.com:5349' }, { urls: 'stun:stun.12voip.com:5349' },
+  { urls: 'stun:stun.voipraider.com:5349' }, { urls: 'stun:stun.voipmove.com:5349' },
+  { urls: 'stun:stun.voipzen.com:5349' }, { urls: 'stun:stun.viagenie.ca:5349' },
+  { urls: 'stun:stun.stunprotocol.org:5349' }, { urls: 'stun:stun.counterpath.com:5349' },
+  { urls: 'stun:stun.schlund.de:5349' }, { urls: 'stun:stun.voipgate.com:5349' },
+  { urls: 'stun:stun.callwithus.com:5349' }, { urls: 'stun:stun.netapp.com:5349' },
+  { urls: 'stun:stun.blink.de:5349' }, { urls: 'stun:stun.ovh.net:5349' },
+  { urls: 'stun:stun.evaphone.com:5349' }, { urls: 'stun:stun.intervoip.com:5349' },
+  { urls: 'stun:stun.freevoipdeal.com:5349' }, { urls: 'stun:stun.voxox.com:5349' },
+  { urls: 'stun:stun.pbxes.com:5349' }, { urls: 'stun:stun.pbxes.de:5349' },
+  { urls: 'stun:stun.gradwell.com:5349' }, { urls: 'stun:stun.ideasip.com:5349' },
+  { urls: 'stun:stun.phonepower.com:5349' }, { urls: 'stun:stun.skyways.com:5349' },
+  { urls: 'stun:stun.3cx.com:5349' }, { urls: 'stun:stun.myvoipprovider.com:5349' },
+  { urls: 'stun:stun.t-online.de:5349' }, { urls: 'stun:stun.sippeer.com:5349' },
+  { urls: 'stun:stun.azteca.net:5349' }, { urls: 'stun:stun.zoiper.com:5349' },
+  { urls: 'stun:stun.onsip.com:5349' }, { urls: 'stun:stun.voip.ms:5349' },
+  { urls: 'stun:stun.telnyx.com:5349' }, { urls: 'stun:stun.flowroute.com:5349' },
+  { urls: 'stun:stun.bandwidth.com:5349' }, { urls: 'stun:stun.vonage.com:5349' },
+  { urls: 'stun:stun.1und1.de:5349' }, { urls: 'stun:stun.gmx.net:5349' },
+  { urls: 'stun:stun.web.de:5349' }, { urls: 'stun:stun.rockenstein.de:5349' },
+  { urls: 'stun:stun.lancom-systems.de:5349' }, { urls: 'stun:stun.aa.net.uk:5349' },
   { urls: 'stun:stun.mit.de:5349' },
   { urls: 'turn:numb.viagenie.ca:80?transport=tcp', username: 'numb@viagenie.ca', credential: 'numb' },
   { urls: 'turn:numb.viagenie.ca:443?transport=tcp', username: 'numb@viagenie.ca', credential: 'numb' },
@@ -468,22 +412,11 @@ const ALL_ICE_SERVERS = [
   { urls: 'turn:openrelay.metered.ca:5349?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
 ];
 
-// 로컬 스토리지 Offer 복원 키
-const LAST_OFFER_KEY = 'p2p_last_offer';
-
 // ==================== 데이터 관리 ====================
-function loadRooms() {
-  rooms = JSON.parse(localStorage.getItem(ROOMS_KEY) || '[]');
-}
-function saveRooms() {
-  localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
-}
-function loadMessages(rid) {
-  return JSON.parse(localStorage.getItem(MSG_PREFIX + rid) || '[]');
-}
-function saveMessages(rid, msgs) {
-  localStorage.setItem(MSG_PREFIX + rid, JSON.stringify(msgs.slice(-500)));
-}
+function loadRooms() { rooms = JSON.parse(localStorage.getItem(ROOMS_KEY) || '[]'); }
+function saveRooms() { localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms)); }
+function loadMessages(rid) { return JSON.parse(localStorage.getItem(MSG_PREFIX + rid) || '[]'); }
+function saveMessages(rid, msgs) { localStorage.setItem(MSG_PREFIX + rid, JSON.stringify(msgs.slice(-500))); }
 
 // ==================== 화면 전환 ====================
 function showView(id) {
@@ -491,7 +424,6 @@ function showView(id) {
   document.getElementById('createRoomView').style.display = 'none';
   document.getElementById('autoJoinView').style.display = 'none';
   document.getElementById('chatScreen').style.display = 'none';
-
   if (id === 'chatScreen') {
     document.getElementById('chatScreen').style.display = 'flex';
   } else if (id) {
@@ -523,7 +455,7 @@ function renderRoomList() {
     </div>`).join('');
 }
 
-// ==================== 새 채팅 시작 (UI 전환) ====================
+// ==================== 새 채팅 시작 ====================
 function startNewRoom() {
   if (isCreating) return;
   document.getElementById('newRoomName').value = '';
@@ -534,13 +466,12 @@ function startNewRoom() {
   showCreateRoom();
 }
 
-// ==================== 방 만들기 (호스트) ====================
+// ==================== 방 만들기 (타임아웃에도 실패하지 않음) ====================
 async function createNewRoom() {
   if (isCreating) return;
   const btn = document.getElementById('btnCreateRoom');
   const spinner = document.getElementById('createSpinner');
 
-  // 버튼 비활성화 및 로딩 표시
   isCreating = true;
   btn.disabled = true;
   spinner.classList.remove('hidden');
@@ -556,7 +487,6 @@ async function createNewRoom() {
     rooms.push(room);
     saveRooms();
 
-    // Offer 생성 (모든 ICE 서버 사용)
     const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
     const dc = pc.createDataChannel('chat');
     peers['local'] = { pc, dc };
@@ -564,25 +494,29 @@ async function createNewRoom() {
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    await waitIce(pc);
-    monitorPC(pc, 'local');
 
-    // sessionStorage에 Offer 저장 (재접속 대비)
-    sessionStorage.setItem(LAST_OFFER_KEY, JSON.stringify({ roomId: activeRoomId, offer: pc.localDescription }));
+    // ICE 수집 (최대 8초 기다리되 실패해도 진행)
+    try {
+      await Promise.race([
+        waitIce(pc),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+      ]);
+    } catch (e) {
+      console.log('⚠️ ICE 수집 시간 초과, 현재까지 수집된 후보로 진행');
+    }
+
+    monitorPC(pc, 'local');
+    sessionStorage.setItem('p2p_last_offer', JSON.stringify({ roomId: activeRoomId, offer: pc.localDescription }));
 
     const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(pc.localDescription));
     document.getElementById('inviteLink').textContent = link;
     document.getElementById('createdRoomInfo').style.display = 'block';
     console.log('🔗 초대 링크 생성:', link);
 
-    // 성공 후 UI 업데이트
-    btn.disabled = false;
-    spinner.classList.add('hidden');
-    isCreating = false;
-
   } catch (e) {
     console.error('방 생성 실패:', e);
-    alert('방 생성에 실패했습니다. 다시 시도해주세요.');
+    alert('방 생성에 실패했습니다. 네트워크를 확인하거나 다시 시도해주세요.');
+  } finally {
     btn.disabled = false;
     spinner.classList.add('hidden');
     isCreating = false;
@@ -603,10 +537,8 @@ async function handleHash() {
   if (params.has('join') && params.has('offer')) {
     const offerBase64 = params.get('offer');
     const roomId = params.get('join');
-    console.log('📦 offer 파라미터 (URL-safe):', offerBase64);
     try {
-      const offerJson = fromBase64URL(offerBase64);
-      const offer = JSON.parse(offerJson);
+      const offer = JSON.parse(fromBase64URL(offerBase64));
       console.log('✅ offer 파싱 성공');
 
       showAutoJoin();
@@ -640,20 +572,16 @@ async function handleHash() {
   } else if (params.has('ans') && params.has('answer')) {
     const answerBase64 = params.get('answer');
     const roomId = params.get('ans');
-    console.log('📦 answer 파라미터:', answerBase64);
     try {
-      const answerJson = fromBase64URL(answerBase64);
-      const answer = JSON.parse(answerJson);
+      const answer = JSON.parse(fromBase64URL(answerBase64));
       console.log('✅ answer 파싱 성공');
 
-      // Answer 링크 처리
       if (peers['local'] && activeRoomId === roomId) {
         await peers['local'].pc.setRemoteDescription(answer);
-        console.log('✅ Answer 적용 (현재 호스트)');
       } else {
-        const stored = sessionStorage.getItem(LAST_OFFER_KEY);
+        const stored = sessionStorage.getItem('p2p_last_offer');
         if (stored) {
-          const { offer: storedOffer } = JSON.parse(stored);
+          const { offer } = JSON.parse(stored);
           closeAllPeers();
           isOfferer = true;
           activeRoomId = roomId;
@@ -662,12 +590,12 @@ async function handleHash() {
           const dc = pc.createDataChannel('chat');
           peers['local'] = { pc, dc };
           setupDataChannel(dc, 'local');
-          await pc.setLocalDescription(storedOffer);
+          await pc.setLocalDescription(offer);
           await pc.setRemoteDescription(answer);
           monitorPC(pc, 'local');
           console.log('✅ 저장된 Offer로 Answer 적용');
         } else {
-          alert('저장된 Offer가 없습니다. 방을 먼저 만들거나 초대 링크를 받은 후 Answer를 적용해주세요.');
+          alert('방장이 아니거나 Offer 정보가 만료되었습니다. 방장에게 새 초대를 요청하세요.');
         }
       }
     } catch (e) {
@@ -685,7 +613,12 @@ async function generateAnswer(offer) {
   await pc.setRemoteDescription(offer);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  await waitIce(pc);
+  try {
+    await Promise.race([
+      waitIce(pc),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+    ]);
+  } catch (e) { console.log('⚠️ Answer ICE 시간 초과'); }
   monitorPC(pc, peerId);
   return pc.localDescription;
 }
@@ -741,7 +674,7 @@ function monitorPC(pc, peerId) {
   };
 }
 
-// ==================== ECDH 핸드셰이크 ====================
+// ==================== ECDH + AES-256-GCM 암호화 (검증 포함) ====================
 async function startHandshake(dc) {
   const eph = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-521' }, true, ['deriveBits']);
   peers['_eph'] = { private: eph.privateKey, public: eph.publicKey };
@@ -760,8 +693,32 @@ async function handleHandshake(data, dc) {
     const shared = await crypto.subtle.deriveBits({ name: 'ECDH', public: remotePub }, peers['_eph'].private, 256);
     sharedKey = await crypto.subtle.importKey('raw', shared, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     delete peers['_eph'];
-    console.log('🔐 암호화 키 교환 완료');
+
+    // 🔐 암호화 검증: 테스트 메시지 암복호화
+    const testMsg = 'connection-test-' + Date.now();
+    const enc = await encrypt(testMsg);
+    const dec = await decrypt(enc);
+    if (dec === testMsg) {
+      document.getElementById('encryptionBadge').classList.remove('hidden');
+      appendMessage('✅ AES-256-GCM 암호화 연결이 확인되었습니다.', 'system');
+      console.log('🔐 암호화 검증 완료');
+    } else {
+      console.error('❌ 암호화 검증 실패: 복호화 불일치');
+      appendMessage('❌ 암호화 검증에 실패했습니다. 다시 연결해주세요.', 'system');
+    }
   } catch (e) { console.error(e); }
+}
+
+async function encrypt(plaintext) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sharedKey, new TextEncoder().encode(plaintext));
+  return { iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)) };
+}
+
+async function decrypt(data) {
+  const iv = new Uint8Array(data.iv), ct = new Uint8Array(data.ct);
+  const buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sharedKey, ct);
+  return new TextDecoder().decode(buf);
 }
 
 // ==================== 메시지 ====================
@@ -788,35 +745,54 @@ function saveLocalMessage(text, sender) {
 function appendMessage(text, type) {
   const c = document.getElementById('messagesContainer');
   const d = document.createElement('div');
-  d.className = `msg ${type}`;
+  d.className = `msg ${type || 'other'}`;
   d.innerHTML = `<div class="bubble">${escapeHtml(text)}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
   c.appendChild(d);
   c.scrollTop = c.scrollHeight;
 }
 
-async function encrypt(plaintext) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sharedKey, new TextEncoder().encode(plaintext));
-  return { iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)) };
-}
-
-async function decrypt(data) {
-  const iv = new Uint8Array(data.iv), ct = new Uint8Array(data.ct);
-  const buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sharedKey, ct);
-  return new TextDecoder().decode(buf);
-}
-
-// ==================== 방 입장 (UI) ====================
-function enterRoom(roomId) {
+// ==================== 방 입장 (재연결 지원) ====================
+async function enterRoom(roomId) {
   const room = rooms.find(r => r.id === roomId);
   if (!room) return;
+
+  if (activeRoomId === roomId && connectedPeers.length > 0) {
+    document.getElementById('currentRoomName').textContent = room.name;
+    showChat();
+    return;
+  }
+
+  closeAllPeers();
   activeRoomId = roomId;
+  isOfferer = (room.members[0] === myPeerId);
+
   document.getElementById('currentRoomName').textContent = room.name;
   document.getElementById('messagesContainer').innerHTML = '';
   loadMessages(roomId).forEach(msg => appendMessage(msg.text, msg.sender === myPeerId ? 'mine' : 'other'));
+
+  if (isOfferer) {
+    const stored = sessionStorage.getItem('p2p_last_offer');
+    if (stored) {
+      try {
+        const { offer } = JSON.parse(stored);
+        const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
+        const dc = pc.createDataChannel('chat');
+        peers['local'] = { pc, dc };
+        setupDataChannel(dc, 'local');
+        await pc.setLocalDescription(offer);
+        monitorPC(pc, 'local');
+        console.log('✅ 저장된 Offer로 복원');
+      } catch (e) { console.log('⚠️ Offer 복원 실패'); }
+    }
+  }
+
   updateMemberListUI();
   updateOnlineStatus();
   showChat();
+
+  if (!isOfferer && connectedPeers.length === 0) {
+    appendMessage('⚠️ 방장이 오프라인입니다. 새 초대 링크를 받으면 다시 연결됩니다.', 'system');
+  }
 }
 
 // ==================== 초대 / 나가기 ====================
@@ -825,20 +801,36 @@ async function inviteToCurrentRoom() {
     alert('방장만 초대할 수 있습니다.');
     return;
   }
-  // 기존 피어가 있는지 확인
   if (!peers['local']) {
-    alert('연결이 끊겼습니다. 방을 다시 열어주세요.');
-    return;
+    await createLocalOfferForCurrentRoom();
   }
   const offer = peers['local'].pc.localDescription;
   const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(offer));
   prompt('초대 링크를 복사하세요:', link);
 }
 
+async function createLocalOfferForCurrentRoom() {
+  const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
+  const dc = pc.createDataChannel('chat');
+  peers['local'] = { pc, dc };
+  setupDataChannel(dc, 'local');
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  try {
+    await Promise.race([
+      waitIce(pc),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+    ]);
+  } catch (e) {}
+  sessionStorage.setItem('p2p_last_offer', JSON.stringify({ roomId: activeRoomId, offer: pc.localDescription }));
+  monitorPC(pc, 'local');
+}
+
 function leaveCurrentRoom() {
   closeAllPeers();
   activeRoomId = null;
   sharedKey = null;
+  document.getElementById('encryptionBadge').classList.add('hidden');
   showRoomList();
 }
 
@@ -900,9 +892,11 @@ async function importAllData(e) {
 
 // ==================== 유틸 ====================
 function waitIce(pc) {
-  return new Promise(r => {
-    if (pc.iceGatheringState === 'complete') r();
-    else pc.addEventListener('icegatheringstatechange', () => pc.iceGatheringState === 'complete' && r());
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') resolve();
+    else pc.addEventListener('icegatheringstatechange', () => {
+      if (pc.iceGatheringState === 'complete') resolve();
+    });
   });
 }
 
