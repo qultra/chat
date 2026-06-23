@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0, minimum-scale=1.0">
-  <title>P2P 암호 채팅 – 최종 완전판</title>
+  <title>P2P 암호 채팅 – 완벽 최종판</title>
   <style>
     :root {
       --bg: #06090f; --surface: #0f141e; --card: rgba(15,20,30,0.9);
@@ -120,7 +120,7 @@
     <div id="simpleMode">
       <div class="card text-center">
         <h3 style="margin-bottom:6px;">서버 없이 완벽한 프라이버시</h3>
-        <p class="text-sub mb">Signal 수준 종단간 암호화<br>비밀번호는 절대 URL에 노출되지 않음</p>
+        <p class="text-sub mb">Signal 수준 종단간 암호화<br>비밀번호는 URL에 절대 노출되지 않음</p>
         <button class="btn primary" onclick="startNewChat()">✨ 새 채팅 생성</button>
         <button class="btn mt" onclick="showJoinPanel()">📩 초대 링크로 참가</button>
       </div>
@@ -174,8 +174,9 @@
       <div id="passwordPrompt" class="card text-center">
         <strong>🔐 채팅방 암호 입력</strong>
         <input type="password" id="chatPasswordInput" placeholder="상대와 공유한 암호">
-        <button class="btn primary mt" onclick="submitPassword()">암호 설정</button>
+        <button class="btn primary mt" id="submitPasswordBtn" onclick="submitPassword()">암호 설정</button>
         <p class="text-sub mt">암호가 없으면 메시지를 보낼 수 없으며, 수신된 암호문만 표시됩니다.</p>
+        <p id="passwordError" class="text-sub" style="color:var(--danger); display:none;"></p>
       </div>
       <div id="messages"></div>
       <div id="typingIndicator" class="typing-indicator">상대방이 입력 중...</div>
@@ -293,8 +294,7 @@ function setupDC(){
   if(!dc)return;
   dc.onopen=()=>{
     updateConn(true); showChat();
-    // 자동으로 ECDH 공개키 및 salt(offerer만) 전송
-    startEcdhExchange();
+    startEcdhExchange(); // 공개키 교환 시작
   };
   dc.onmessage=onMsg;
   dc.onclose=()=>{updateConn(false);showSimple();};
@@ -309,39 +309,64 @@ function updateConn(ok){document.getElementById('connDot').className='dot '+(ok?
 
 // ==================== ECDH 교환 (비밀번호 없이 먼저) ====================
 async function startEcdhExchange(){
-  ourEcdh = await crypto.subtle.generateKey(ECDH, true, ['deriveKey','deriveBits']);
-  const pubRaw = await crypto.subtle.exportKey('raw', ourEcdh.publicKey);
-  if (isOfferer) {
-    salt = crypto.getRandomValues(new Uint8Array(32));
-    dc.send(JSON.stringify({type:'__ecdhe__', salt:buf2b64(salt.buffer), pubKey:buf2b64(pubRaw)}));
-  } else {
-    // answerer는 salt를 받지 못했으므로 아직 salt 없음. 나중에 offerer로부터 받으면 설정됨.
-    dc.send(JSON.stringify({type:'__ecdhe__', pubKey:buf2b64(pubRaw)}));
+  try {
+    ourEcdh = await crypto.subtle.generateKey(ECDH, true, ['deriveKey','deriveBits']);
+    const pubRaw = await crypto.subtle.exportKey('raw', ourEcdh.publicKey);
+    if (isOfferer) {
+      salt = crypto.getRandomValues(new Uint8Array(32));
+      dc.send(JSON.stringify({type:'__ecdhe__', salt:buf2b64(salt.buffer), pubKey:buf2b64(pubRaw)}));
+    } else {
+      dc.send(JSON.stringify({type:'__ecdhe__', pubKey:buf2b64(pubRaw)}));
+    }
+  } catch(e) {
+    addMsg('보안 초기화 오류: '+e.message, 'system');
   }
 }
 
 async function handleEcdheMessage(data){
-  if (data.salt) {
-    salt = new Uint8Array(b642buf(data.salt));
-  }
-  peerEcdhPub = await crypto.subtle.importKey('raw', b642buf(data.pubKey), ECDH, true, []);
-  // 이미 암호가 입력되어 있다면 즉시 세션 키 유도
-  if (password && ourEcdh && peerEcdhPub && salt) {
-    await deriveSessionKey();
+  try {
+    if (data.salt) {
+      salt = new Uint8Array(b642buf(data.salt));
+    }
+    peerEcdhPub = await crypto.subtle.importKey('raw', b642buf(data.pubKey), ECDH, true, []);
+    // 이미 암호가 입력되어 있다면 즉시 세션 키 유도
+    if (password && ourEcdh && peerEcdhPub && salt) {
+      await deriveSessionKey();
+    }
+  } catch(e) {
+    addMsg('키 교환 처리 실패: '+e.message, 'system');
   }
 }
 
 // ==================== 암호 입력 및 세션 키 유도 ====================
 async function submitPassword(){
-  password = document.getElementById('chatPasswordInput').value;
-  if (!password) { alert('암호를 입력하세요.'); return; }
-  if (!salt || !ourEcdh || !peerEcdhPub) {
-    addMsg('아직 상대방의 키를 받지 못했습니다. 잠시 후 다시 시도하세요.', 'system');
+  const pwInput = document.getElementById('chatPasswordInput');
+  const errorEl = document.getElementById('passwordError');
+  errorEl.style.display = 'none';
+  password = pwInput.value.trim();
+  if (!password) {
+    errorEl.textContent = '암호를 입력해주세요.';
+    errorEl.style.display = 'block';
     return;
   }
-  await deriveAuthKey();
-  await deriveSessionKey();
-  document.getElementById('passwordPrompt').style.display = 'none';
+  if (!salt || !ourEcdh || !peerEcdhPub) {
+    errorEl.textContent = '아직 상대방과의 보안 연결이 준비되지 않았습니다. 잠시 후 다시 시도하세요.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    await deriveAuthKey();
+    await deriveSessionKey();
+    // 성공 시 UI 업데이트
+    document.getElementById('passwordPrompt').style.display = 'none';
+    document.getElementById('securityCard').style.display = 'flex';
+    addMsg('🔐 세션 키 설정 완료. 이제 암호화된 메시지를 주고받을 수 있습니다.', 'system');
+  } catch (e) {
+    console.error(e);
+    errorEl.textContent = '세션 키 생성에 실패했습니다: ' + e.message;
+    errorEl.style.display = 'block';
+  }
 }
 
 async function deriveAuthKey(){
@@ -365,8 +390,6 @@ async function deriveSessionKey(){
   sendChain = { chain: await hkdfExpand(sb, str2buf('send-chain')), seq:0 };
   recvChain = { chain: await hkdfExpand(sb, str2buf('recv-chain')), seq:-1 };
   document.getElementById('sessionFingerprint').textContent = buf2hex(await crypto.subtle.digest('SHA-256', sb)).slice(0,32);
-  document.getElementById('securityCard').style.display = 'flex';
-  addMsg('🔐 세션 키 설정 완료. 이제 메시지를 주고받을 수 있습니다.', 'system');
 }
 
 async function hkdfExpand(prk, info){
@@ -411,13 +434,13 @@ async function sendText(){
   const txt = inp.value.trim();
   if (!txt || !dc || dc.readyState !== 'open') return;
   if (!sessionKey) {
-    alert('암호를 먼저 설정해야 메시지를 암호화하여 보낼 수 있습니다.');
+    addMsg('⚠️ 암호를 먼저 설정해야 메시지를 암호화하여 보낼 수 있습니다.', 'system');
     return;
   }
   try {
-    const enc = await encryptPayload({ type:'text', content: txt });
+    const enc = await encryptPayload({ type:'text', content: txt, id: genUUID() });
     dc.send(JSON.stringify({ type:'msg', ...enc }));
-    addMsg(txt, 'me');
+    addMsg(txt, 'me', enc.id);
     inp.value = '';
   } catch (e) {
     addMsg('전송 실패: ' + e.message, 'system');
@@ -451,7 +474,7 @@ function onMsg(e){
       }
       decryptPayload(d).then(inner => {
         if (inner.type === 'text') {
-          addMsg(inner.content, 'other');
+          addMsg(inner.content, 'other', inner.id);
           sendReadReceipt(inner.id);
         } else if (inner.type === 'typing') {
           document.getElementById('typingIndicator').style.display = inner.state ? 'block' : 'none';
@@ -465,13 +488,13 @@ function onMsg(e){
         } else if (inner.type === 'file_end') {
           if (fileReceive && fileReceive.id === inner.id) assembleFile();
         }
-      }).catch(() => {
+      }).catch(err => {
         // 복호화 실패 → 원문 암호 데이터 표시
         addEncryptedMessage(d);
       });
     }
   } catch (e) {
-    // JSON 파싱 오류 등
+    // JSON 파싱 오류 등은 무시
   }
 }
 
@@ -510,15 +533,15 @@ function addMsg(text, who, msgId){
   d.className = 'msg ' + (who==='me'?'me':who==='other'?'other':'system');
   if (msgId) d.id = 'msg-'+msgId;
   let bubble = escapeHtml(text);
+  let timeHtml = `<div class="time">${new Date().toLocaleTimeString()}`;
   if (who==='me' && msgId) {
-    bubble += `<div class="time">${new Date().toLocaleTimeString()} <button class="btn-small" style="background:none;color:var(--danger);" onclick="deleteMessage('${msgId}')">✕</button></div>`;
-  } else {
-    bubble += `<div class="time">${new Date().toLocaleTimeString()}</div>`;
+    timeHtml += ` <button class="btn-small" style="background:none;color:var(--danger);padding:2px 6px;" onclick="deleteMessage('${msgId}')">✕</button>`;
   }
+  timeHtml += `</div>`;
   if (fileReceive && text.startsWith('📥')) {
     bubble += `<div class="progress"><div class="progress-bar" id="file-progress"></div></div>`;
   }
-  d.innerHTML = `<div class="bubble">${bubble}</div>`;
+  d.innerHTML = `<div class="bubble">${bubble}${timeHtml}</div>`;
   c.appendChild(d);
   c.scrollTop = c.scrollHeight;
 }
@@ -607,9 +630,11 @@ function closeConnection() {
   if (pc) { pc.close(); pc = null; }
   dc = null; authKey = sessionKey = null; sendChain = recvChain = null;
   salt = null; ourEcdh = peerEcdhPub = null; fileReceive = null;
+  password = null;
   document.getElementById('sessionFingerprint').textContent = '';
   document.getElementById('securityCard').style.display = 'none';
   document.getElementById('passwordPrompt').style.display = 'block';
+  document.getElementById('passwordError').style.display = 'none';
 }
 function formatBytes(b) { return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB'; }
 function toggleSecurityDetail() { document.getElementById('securityDetail').classList.toggle('hidden'); }
