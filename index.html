@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0, minimum-scale=1.0">
-  <title>P2P 암호 채팅 – 최종 완전판</title>
+  <title>P2P 암호 채팅 – 최종 안정판</title>
   <style>
     :root {
       --bg: #06090f; --surface: #0f141e; --card: rgba(15,20,30,0.9);
@@ -199,7 +199,7 @@ let pc, dc, isOfferer = false, password = null;
 let authKey, sessionKey, sendChain, recvChain;
 let ourEcdhPair = null, peerEcdhPub = null;
 let salt;
-let handshakeDone = false;   // ★ 보안 핸드셰이크 완료 여부
+let handshakeDone = false;
 const ECDH={name:'ECDH',namedCurve:'P-256'};
 const PBKDF2_ITERS=600000;
 let fileReceive=null;
@@ -284,7 +284,9 @@ function setupDC(){
   if(!dc)return;
   dc.onopen=()=>{
     updateConn(true); showChat();
-    if(!handshakeDone) startEcdhExchange();   // 핸드셰이크가 안 됐을 때만 교환 시작
+    // 재접속 시에도 무조건 새 핸드셰이크
+    handshakeDone = false;
+    startEcdhExchange();
   };
   dc.onmessage=onMsg;
   dc.onclose=()=>{updateConn(false);showSimple();};
@@ -314,7 +316,7 @@ async function startEcdhExchange(){
 }
 
 async function handleEcdheMessage(data){
-  if(handshakeDone) return;   // 이미 핸드셰이크가 끝났으면 무시
+  if(handshakeDone) return;
   try {
     if (data.salt) salt = new Uint8Array(b642buf(data.salt));
     peerEcdhPub = await crypto.subtle.importKey('raw', b642buf(data.pubKey), ECDH, true, []);
@@ -341,6 +343,8 @@ async function submitPassword(){
     errorEl.style.display = 'block';
     return;
   }
+
+  if (handshakeDone) return;
 
   try {
     await deriveAuthKey();
@@ -376,14 +380,30 @@ async function deriveSessionKey(){
   const sb = await crypto.subtle.exportKey('raw', sessionKey);
   const chainA = await hkdfExpand(sb, str2buf('chain-a'));
   const chainB = await hkdfExpand(sb, str2buf('chain-b'));
-  if (isOfferer) {
+
+  // ★ 공개키 비교로 송신 체인 결정
+  const ourPub = await crypto.subtle.exportKey('raw', ourEcdhPair.publicKey);
+  const peerPub = await crypto.subtle.exportKey('raw', peerEcdhPub);
+  const weAreSmaller = compareBuffers(new Uint8Array(ourPub), new Uint8Array(peerPub)) < 0;
+
+  // 더 작은 쪽이 chain-a를 송신용으로 사용 (규칙은 아무렇게나 정해도 되지만 양쪽이 동일하게 적용)
+  if (weAreSmaller) {
     sendChain = { chain: chainA, seq:0 };
     recvChain = { chain: chainB, seq:-1 };
   } else {
     sendChain = { chain: chainB, seq:0 };
     recvChain = { chain: chainA, seq:-1 };
   }
+
   document.getElementById('sessionFingerprint').textContent = buf2hex(await crypto.subtle.digest('SHA-256', sb)).slice(0,32);
+}
+
+function compareBuffers(buf1, buf2) {
+  for (let i=0; i<buf1.byteLength; i++) {
+    if (buf1[i] < buf2[i]) return -1;
+    if (buf1[i] > buf2[i]) return 1;
+  }
+  return 0;
 }
 
 async function hkdfExpand(prk, info){
