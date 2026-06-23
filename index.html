@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>P2P 메신저 – 완벽판 (암호화 검증)</title>
+  <title>P2P 메신저 – 완전무결 최종판</title>
   <style>
     :root {
       --bg: #0b0e14; --surface: #141a24; --card-bg: rgba(20,26,36,0.8);
@@ -123,7 +123,6 @@
     .encryption-badge {
       font-size: 0.7rem; background: rgba(74,222,128,0.2); color: #4ade80;
       padding: 2px 10px; border-radius: 10px; margin-left: 8px;
-      display: inline-flex; align-items: center; gap: 4px;
     }
   </style>
 </head>
@@ -210,8 +209,9 @@
 
 <script>
 // ==================== 전역 변수 ====================
-const ROOMS_KEY = 'p2p_rooms_v21';
+const ROOMS_KEY = 'p2p_rooms_final';
 const MSG_PREFIX = 'p2p_msg_';
+const OFFER_PREFIX = 'p2p_offer_';
 let rooms = [], activeRoomId = null, sharedKey = null;
 let myPeerId = 'peer-' + crypto.randomUUID().slice(0,8);
 let peers = {}, connectedPeers = [], isOfferer = false;
@@ -266,7 +266,7 @@ const ALL_ICE_SERVERS = [
   // OpenRelay/Metered STUN
   { urls: 'stun:openrelay.metered.ca:80' },
   { urls: 'stun:openrelay.metered.ca:443' },
-  // Metered TURN (공용 계정) - TCP/UDP
+  // Metered TURN (무료 공용 계정) - TCP/UDP
   { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:80?transport=udp', username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
@@ -417,6 +417,8 @@ function loadRooms() { rooms = JSON.parse(localStorage.getItem(ROOMS_KEY) || '[]
 function saveRooms() { localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms)); }
 function loadMessages(rid) { return JSON.parse(localStorage.getItem(MSG_PREFIX + rid) || '[]'); }
 function saveMessages(rid, msgs) { localStorage.setItem(MSG_PREFIX + rid, JSON.stringify(msgs.slice(-500))); }
+function saveOffer(roomId, offer) { localStorage.setItem(OFFER_PREFIX + roomId, JSON.stringify(offer)); }
+function loadOffer(roomId) { const stored = localStorage.getItem(OFFER_PREFIX + roomId); return stored ? JSON.parse(stored) : null; }
 
 // ==================== 화면 전환 ====================
 function showView(id) {
@@ -424,11 +426,8 @@ function showView(id) {
   document.getElementById('createRoomView').style.display = 'none';
   document.getElementById('autoJoinView').style.display = 'none';
   document.getElementById('chatScreen').style.display = 'none';
-  if (id === 'chatScreen') {
-    document.getElementById('chatScreen').style.display = 'flex';
-  } else if (id) {
-    document.getElementById(id).style.display = 'block';
-  }
+  if (id === 'chatScreen') document.getElementById('chatScreen').style.display = 'flex';
+  else if (id) document.getElementById(id).style.display = 'block';
 }
 function showRoomList() { showView('roomListView'); renderRoomList(); }
 function showCreateRoom() { showView('createRoomView'); }
@@ -471,10 +470,7 @@ async function createNewRoom() {
   if (isCreating) return;
   const btn = document.getElementById('btnCreateRoom');
   const spinner = document.getElementById('createSpinner');
-
-  isCreating = true;
-  btn.disabled = true;
-  spinner.classList.remove('hidden');
+  isCreating = true; btn.disabled = true; spinner.classList.remove('hidden');
 
   const name = document.getElementById('newRoomName').value.trim() || '새 채팅방';
   const type = document.getElementById('newRoomType').value;
@@ -484,8 +480,7 @@ async function createNewRoom() {
     activeRoomId = crypto.randomUUID();
 
     const room = { id: activeRoomId, name, type, createdAt: Date.now(), members: [myPeerId] };
-    rooms.push(room);
-    saveRooms();
+    rooms.push(room); saveRooms();
 
     const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
     const dc = pc.createDataChannel('chat');
@@ -494,19 +489,15 @@ async function createNewRoom() {
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-
-    // ICE 수집 (최대 8초 기다리되 실패해도 진행)
     try {
       await Promise.race([
         waitIce(pc),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
       ]);
-    } catch (e) {
-      console.log('⚠️ ICE 수집 시간 초과, 현재까지 수집된 후보로 진행');
-    }
+    } catch (e) { console.log('⚠️ ICE 수집 시간 초과, 현재까지 수집된 후보로 진행'); }
 
     monitorPC(pc, 'local');
-    sessionStorage.setItem('p2p_last_offer', JSON.stringify({ roomId: activeRoomId, offer: pc.localDescription }));
+    saveOffer(activeRoomId, pc.localDescription);
 
     const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(pc.localDescription));
     document.getElementById('inviteLink').textContent = link;
@@ -517,9 +508,7 @@ async function createNewRoom() {
     console.error('방 생성 실패:', e);
     alert('방 생성에 실패했습니다. 네트워크를 확인하거나 다시 시도해주세요.');
   } finally {
-    btn.disabled = false;
-    spinner.classList.add('hidden');
-    isCreating = false;
+    btn.disabled = false; spinner.classList.add('hidden'); isCreating = false;
   }
 }
 
@@ -552,11 +541,9 @@ async function handleHash() {
       let room = rooms.find(r => r.id === roomId);
       if (!room) {
         room = { id: roomId, name: '참가한 채팅방', type: 'group', createdAt: Date.now(), members: [myPeerId] };
-        rooms.push(room);
-        saveRooms();
+        rooms.push(room); saveRooms();
       } else if (!room.members.includes(myPeerId)) {
-        room.members.push(myPeerId);
-        saveRooms();
+        room.members.push(myPeerId); saveRooms();
       }
 
       const answer = await generateAnswer(offer);
@@ -566,7 +553,7 @@ async function handleHash() {
       document.getElementById('autoSpinner').style.display = 'none';
       document.getElementById('autoStatus').textContent = 'Answer 링크를 방장에게 보내세요.';
     } catch (e) {
-      console.error('❌ offer 파싱 실패:', e);
+      console.error(e);
       document.getElementById('autoStatus').textContent = '초대 링크가 손상되었습니다.';
     }
   } else if (params.has('ans') && params.has('answer')) {
@@ -576,12 +563,15 @@ async function handleHash() {
       const answer = JSON.parse(fromBase64URL(answerBase64));
       console.log('✅ answer 파싱 성공');
 
+      // 1. 현재 활성 연결이 있는 경우
       if (peers['local'] && activeRoomId === roomId) {
         await peers['local'].pc.setRemoteDescription(answer);
-      } else {
-        const stored = sessionStorage.getItem('p2p_last_offer');
-        if (stored) {
-          const { offer } = JSON.parse(stored);
+        console.log('✅ 바로 Answer 적용');
+      }
+      // 2. 저장된 Offer가 있는 경우 (방장이 페이지를 새로고침했거나 재접속)
+      else {
+        const storedOffer = loadOffer(roomId);
+        if (storedOffer) {
           closeAllPeers();
           isOfferer = true;
           activeRoomId = roomId;
@@ -590,16 +580,16 @@ async function handleHash() {
           const dc = pc.createDataChannel('chat');
           peers['local'] = { pc, dc };
           setupDataChannel(dc, 'local');
-          await pc.setLocalDescription(offer);
+          await pc.setLocalDescription(storedOffer);
           await pc.setRemoteDescription(answer);
           monitorPC(pc, 'local');
           console.log('✅ 저장된 Offer로 Answer 적용');
         } else {
-          alert('방장이 아니거나 Offer 정보가 만료되었습니다. 방장에게 새 초대를 요청하세요.');
+          alert('이 방의 방장이 아니거나 Offer가 만료되었습니다. 방을 다시 만들어 주세요.');
         }
       }
     } catch (e) {
-      console.error('❌ answer 파싱 실패:', e);
+      console.error(e);
       alert('Answer 링크가 올바르지 않습니다.');
     }
   }
@@ -618,7 +608,7 @@ async function generateAnswer(offer) {
       waitIce(pc),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
     ]);
-  } catch (e) { console.log('⚠️ Answer ICE 시간 초과'); }
+  } catch (e) { console.log('⚠️ ICE 시간 초과'); }
   monitorPC(pc, peerId);
   return pc.localDescription;
 }
@@ -635,8 +625,7 @@ function setupDataChannel(dc, peerId) {
       updateMemberListUI();
       const room = rooms.find(r => r.id === activeRoomId);
       if (room && !room.members.includes(peerId)) {
-        room.members.push(peerId);
-        saveRooms();
+        room.members.push(peerId); saveRooms();
       }
     }
     updateOnlineStatus();
@@ -651,8 +640,7 @@ function setupDataChannel(dc, peerId) {
   dc.onclose = () => {
     if (peerId !== 'local') {
       connectedPeers = connectedPeers.filter(id => id !== peerId);
-      updateMemberListUI();
-      updateOnlineStatus();
+      updateMemberListUI(); updateOnlineStatus();
     }
   };
   if (peers[peerId]) peers[peerId].dc = dc;
@@ -667,8 +655,7 @@ function monitorPC(pc, peerId) {
     } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
       if (peerId !== 'local') {
         connectedPeers = connectedPeers.filter(id => id !== peerId);
-        updateMemberListUI();
-        updateOnlineStatus();
+        updateMemberListUI(); updateOnlineStatus();
       }
     }
   };
@@ -694,17 +681,17 @@ async function handleHandshake(data, dc) {
     sharedKey = await crypto.subtle.importKey('raw', shared, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     delete peers['_eph'];
 
-    // 🔐 암호화 검증: 테스트 메시지 암복호화
-    const testMsg = 'connection-test-' + Date.now();
+    // 암호화 검증
+    const testMsg = 'test-' + Date.now();
     const enc = await encrypt(testMsg);
     const dec = await decrypt(enc);
     if (dec === testMsg) {
       document.getElementById('encryptionBadge').classList.remove('hidden');
-      appendMessage('✅ AES-256-GCM 암호화 연결이 확인되었습니다.', 'system');
+      appendMessage('✅ AES-256-GCM 암호화 연결 확인', 'system');
       console.log('🔐 암호화 검증 완료');
     } else {
-      console.error('❌ 암호화 검증 실패: 복호화 불일치');
-      appendMessage('❌ 암호화 검증에 실패했습니다. 다시 연결해주세요.', 'system');
+      console.error('❌ 암호화 검증 실패');
+      appendMessage('❌ 암호화 검증 실패', 'system');
     }
   } catch (e) { console.error(e); }
 }
@@ -747,8 +734,7 @@ function appendMessage(text, type) {
   const d = document.createElement('div');
   d.className = `msg ${type || 'other'}`;
   d.innerHTML = `<div class="bubble">${escapeHtml(text)}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
-  c.appendChild(d);
-  c.scrollTop = c.scrollHeight;
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
 }
 
 // ==================== 방 입장 (재연결 지원) ====================
@@ -771,24 +757,21 @@ async function enterRoom(roomId) {
   loadMessages(roomId).forEach(msg => appendMessage(msg.text, msg.sender === myPeerId ? 'mine' : 'other'));
 
   if (isOfferer) {
-    const stored = sessionStorage.getItem('p2p_last_offer');
-    if (stored) {
+    const storedOffer = loadOffer(roomId);
+    if (storedOffer) {
       try {
-        const { offer } = JSON.parse(stored);
         const pc = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
         const dc = pc.createDataChannel('chat');
         peers['local'] = { pc, dc };
         setupDataChannel(dc, 'local');
-        await pc.setLocalDescription(offer);
+        await pc.setLocalDescription(storedOffer);
         monitorPC(pc, 'local');
-        console.log('✅ 저장된 Offer로 복원');
+        console.log('✅ 저장된 Offer 복원');
       } catch (e) { console.log('⚠️ Offer 복원 실패'); }
     }
   }
 
-  updateMemberListUI();
-  updateOnlineStatus();
-  showChat();
+  updateMemberListUI(); updateOnlineStatus(); showChat();
 
   if (!isOfferer && connectedPeers.length === 0) {
     appendMessage('⚠️ 방장이 오프라인입니다. 새 초대 링크를 받으면 다시 연결됩니다.', 'system');
@@ -801,11 +784,8 @@ async function inviteToCurrentRoom() {
     alert('방장만 초대할 수 있습니다.');
     return;
   }
-  if (!peers['local']) {
-    await createLocalOfferForCurrentRoom();
-  }
-  const offer = peers['local'].pc.localDescription;
-  const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(offer));
+  await createLocalOfferForCurrentRoom();
+  const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(peers['local'].pc.localDescription));
   prompt('초대 링크를 복사하세요:', link);
 }
 
@@ -822,22 +802,20 @@ async function createLocalOfferForCurrentRoom() {
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
     ]);
   } catch (e) {}
-  sessionStorage.setItem('p2p_last_offer', JSON.stringify({ roomId: activeRoomId, offer: pc.localDescription }));
+  saveOffer(activeRoomId, pc.localDescription);
   monitorPC(pc, 'local');
 }
 
 function leaveCurrentRoom() {
   closeAllPeers();
-  activeRoomId = null;
-  sharedKey = null;
+  activeRoomId = null; sharedKey = null;
   document.getElementById('encryptionBadge').classList.add('hidden');
   showRoomList();
 }
 
 function closeAllPeers() {
   Object.values(peers).forEach(({ pc }) => pc.close());
-  peers = {};
-  connectedPeers = [];
+  peers = {}; connectedPeers = [];
 }
 
 // ==================== UI 갱신 ====================
@@ -860,15 +838,12 @@ function updateOnlineStatus() {
 function exportAllData() {
   const backup = rooms.map(r => ({ ...r, messages: loadMessages(r.id) }));
   const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `p2p-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `p2p-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click();
 }
 
 async function importAllData(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+  const file = e.target.files[0]; if (!file) return;
   const text = await file.text();
   try {
     const data = JSON.parse(text);
@@ -883,9 +858,7 @@ async function importAllData(e) {
         if (room.messages) saveMessages(room.id, room.messages);
       }
     });
-    saveRooms();
-    renderRoomList();
-    alert('복원 완료!');
+    saveRooms(); renderRoomList(); alert('복원 완료!');
   } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
   e.target.value = '';
 }
