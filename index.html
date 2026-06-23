@@ -295,7 +295,7 @@ function setupDC(){
   if(!dc)return;
   dc.onopen=()=>{
     updateConn(true); showChat();
-    startEcdhExchange(); // 공개키 교환 시작
+    startEcdhExchange();
   };
   dc.onmessage=onMsg;
   dc.onclose=()=>{updateConn(false);showSimple();};
@@ -308,7 +308,7 @@ function onIceState(){
 function waitIce(){return new Promise(r=>{if(pc.iceGatheringState==='complete')r();else pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState==='complete')r();});});}
 function updateConn(ok){document.getElementById('connDot').className='dot '+(ok?'on':'off');document.getElementById('connLabel').textContent=ok?'연결됨':'오프라인';}
 
-// ==================== ECDH 교환 (비밀번호 없이 먼저) ====================
+// ==================== ECDH 교환 ====================
 async function startEcdhExchange(){
   try {
     const keyPair = await crypto.subtle.generateKey(ECDH, true, ['deriveKey','deriveBits']);
@@ -327,11 +327,8 @@ async function startEcdhExchange(){
 
 async function handleEcdheMessage(data){
   try {
-    if (data.salt) {
-      salt = new Uint8Array(b642buf(data.salt));
-    }
+    if (data.salt) salt = new Uint8Array(b642buf(data.salt));
     peerEcdhPub = await crypto.subtle.importKey('raw', b642buf(data.pubKey), ECDH, true, []);
-    // 이미 암호가 입력되어 있다면 즉시 세션 키 유도
     if (password && ourEcdhPair && peerEcdhPub && salt) {
       await deriveSessionKey();
     }
@@ -340,7 +337,7 @@ async function handleEcdheMessage(data){
   }
 }
 
-// ==================== 암호 입력 및 세션 키 유도 ====================
+// ==================== 암호 및 세션 키 ====================
 async function submitPassword(){
   const pwInput = document.getElementById('chatPasswordInput');
   const errorEl = document.getElementById('passwordError');
@@ -360,7 +357,6 @@ async function submitPassword(){
   try {
     await deriveAuthKey();
     await deriveSessionKey();
-    // 성공 시 UI 업데이트
     document.getElementById('passwordPrompt').style.display = 'none';
     document.getElementById('securityCard').style.display = 'flex';
     addMsg('🔐 세션 키 설정 완료. 이제 암호화된 메시지를 주고받을 수 있습니다.', 'system');
@@ -373,21 +369,22 @@ async function submitPassword(){
 
 async function deriveAuthKey(){
   const km = await crypto.subtle.importKey('raw', str2buf(password), 'PBKDF2', false, ['deriveKey']);
+  // ★ extractable: true로 변경
   authKey = await crypto.subtle.deriveKey(
     { name:'PBKDF2', salt, iterations:PBKDF2_ITERS, hash:'SHA-512' },
-    km, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
+    km, { name:'AES-GCM', length:256 }, true, ['encrypt','decrypt']
   );
 }
 
 async function deriveSessionKey(){
-  // ★ 수정: ourEcdhPair.privateKey 사용
   const ecdhBits = await crypto.subtle.deriveBits({ name:'ECDH', public:peerEcdhPub }, ourEcdhPair.privateKey, 256);
   const authRaw = await crypto.subtle.exportKey('raw', authKey);
   const ikm = concatBufs(ecdhBits, str2buf(password));
   const hkdfKey = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveKey']);
+  // ★ extractable: true로 변경
   sessionKey = await crypto.subtle.deriveKey(
     { name:'HKDF', hash:'SHA-512', salt:authRaw, info:str2buf('session') },
-    hkdfKey, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
+    hkdfKey, { name:'AES-GCM', length:256 }, true, ['encrypt','decrypt']
   );
   const sb = await crypto.subtle.exportKey('raw', sessionKey);
   sendChain = { chain: await hkdfExpand(sb, str2buf('send-chain')), seq:0 };
@@ -431,7 +428,7 @@ async function decryptPayload(d){
   return JSON.parse(new TextDecoder().decode(plain));
 }
 
-// ==================== 메시지 처리 ====================
+// ==================== 메시지 ====================
 async function sendText(){
   const inp = document.getElementById('msgInput');
   const txt = inp.value.trim();
@@ -471,7 +468,6 @@ function onMsg(e){
     }
     if (d.type === 'msg') {
       if (!sessionKey) {
-        // 세션키 없음 → 원문 암호 데이터 표시
         addEncryptedMessage(d);
         return;
       }
@@ -492,42 +488,27 @@ function onMsg(e){
           if (fileReceive && fileReceive.id === inner.id) assembleFile();
         }
       }).catch(err => {
-        // 복호화 실패 → 원문 암호 데이터 표시
         addEncryptedMessage(d);
       });
     }
-  } catch (e) {
-    // JSON 파싱 오류 등은 무시
-  }
+  } catch (e) {}
 }
 
 function addEncryptedMessage(rawData) {
   const c = document.getElementById('messages');
   const d = document.createElement('div');
   d.className = 'msg system';
-  const jsonStr = JSON.stringify(rawData, null, 2);
-  d.innerHTML = `<div class="encrypted-bubble">
-    <strong>🔒 암호화된 메시지 (해독 불가)</strong><br>${escapeHtml(jsonStr)}
-  </div>`;
-  c.appendChild(d);
-  c.scrollTop = c.scrollHeight;
+  d.innerHTML = `<div class="encrypted-bubble"><strong>🔒 암호화된 메시지 (해독 불가)</strong><br>${escapeHtml(JSON.stringify(rawData, null, 2))}</div>`;
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
 }
 
 async function sendReadReceipt(msgId){
   if (!sessionKey) return;
-  try {
-    const enc = await encryptPayload({ type:'read', id: msgId });
-    dc.send(JSON.stringify({ type:'msg', ...enc }));
-  } catch (e) {}
+  try { const enc = await encryptPayload({ type:'read', id: msgId }); dc.send(JSON.stringify({ type:'msg', ...enc })); } catch (e) {}
 }
 async function deleteMessage(msgId){
   if (!sessionKey) return;
-  try {
-    const enc = await encryptPayload({ type:'delete', id: msgId });
-    dc.send(JSON.stringify({ type:'msg', ...enc }));
-    const el = document.getElementById('msg-'+msgId);
-    if (el) el.remove();
-  } catch (e) {}
+  try { const enc = await encryptPayload({ type:'delete', id: msgId }); dc.send(JSON.stringify({ type:'msg', ...enc })); document.getElementById('msg-'+msgId)?.remove(); } catch (e) {}
 }
 
 function addMsg(text, who, msgId){
@@ -537,27 +518,19 @@ function addMsg(text, who, msgId){
   if (msgId) d.id = 'msg-'+msgId;
   let bubble = escapeHtml(text);
   let timeHtml = `<div class="time">${new Date().toLocaleTimeString()}`;
-  if (who==='me' && msgId) {
-    timeHtml += ` <button class="btn-small" style="background:none;color:var(--danger);padding:2px 6px;" onclick="deleteMessage('${msgId}')">✕</button>`;
-  }
+  if (who==='me' && msgId) timeHtml += ` <button class="btn-small" style="background:none;color:var(--danger);padding:2px 6px;" onclick="deleteMessage('${msgId}')">✕</button>`;
   timeHtml += `</div>`;
-  if (fileReceive && text.startsWith('📥')) {
-    bubble += `<div class="progress"><div class="progress-bar" id="file-progress"></div></div>`;
-  }
+  if (fileReceive && text.startsWith('📥')) bubble += `<div class="progress"><div class="progress-bar" id="file-progress"></div></div>`;
   d.innerHTML = `<div class="bubble">${bubble}${timeHtml}</div>`;
-  c.appendChild(d);
-  c.scrollTop = c.scrollHeight;
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
 }
 
 function markAsRead(msgId) {
   const el = document.getElementById('msg-'+msgId);
-  if (el) {
-    const t = el.querySelector('.time');
-    if (t && !t.querySelector('.read')) t.innerHTML += ' <span class="read" style="color:var(--success);">✓✓</span>';
-  }
+  if (el) { const t = el.querySelector('.time'); if (t && !t.querySelector('.read')) t.innerHTML += ' <span class="read" style="color:var(--success);">✓✓</span>'; }
 }
 
-// ==================== 파일 처리 ====================
+// ==================== 파일 ====================
 function handleFileStart(inner) {
   fileReceive = { id: inner.id, name: inner.name, size: inner.size, fek: b642buf(inner.fek), chunks:[], received:0 };
   addMsg(`📥 ${inner.name} (${formatBytes(inner.size)})`, 'other');
@@ -566,87 +539,64 @@ function handleBinaryChunk(buf) {
   if (!fileReceive) return;
   fileReceive.chunks.push(new Uint8Array(buf));
   fileReceive.received += buf.byteLength;
-  const pct = Math.round(fileReceive.received / fileReceive.size * 100);
   const pb = document.getElementById('file-progress');
-  if (pb) pb.style.width = pct+'%';
-  if (fileReceive.received >= fileReceive.size) {
-    const pp = document.getElementById('file-progress');
-    if (pp) pp.parentElement.remove();
-  }
+  if (pb) pb.style.width = Math.round(fileReceive.received / fileReceive.size * 100)+'%';
+  if (fileReceive.received >= fileReceive.size) document.getElementById('file-progress')?.parentElement?.remove();
 }
 async function assembleFile() {
   if (!fileReceive) return;
   const combined = new Uint8Array(fileReceive.size);
-  let off = 0;
-  for (const c of fileReceive.chunks) { combined.set(c, off); off += c.length; }
-  const iv = combined.slice(0,12);
-  const ct = combined.slice(12);
-  const key = await crypto.subtle.importKey('raw', fileReceive.fek, 'AES-GCM', false, ['decrypt']);
-  const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ct);
-  const blob = new Blob([plain]), url = URL.createObjectURL(blob);
-  const c = document.getElementById('messages');
-  const d = document.createElement('div'); d.className = 'msg other';
-  let html = `<div class="bubble"><div class="file-bubble"><span>📎 ${escapeHtml(fileReceive.name)}</span>`;
-  if (blob.type.startsWith('image/')) html += `<div class="file-preview"><img src="${url}"></div>`;
-  else if (blob.type.startsWith('video/')) html += `<div class="file-preview"><video controls src="${url}"></video></div>`;
-  html += `<a href="${url}" download="${escapeHtml(fileReceive.name)}" style="color:var(--accent);">다운로드</a></div><div class="time">${new Date().toLocaleTimeString()}</div></div>`;
-  d.innerHTML = html; c.appendChild(d); c.scrollTop = c.scrollHeight;
-  fileReceive = null;
+  let off=0; for(const c of fileReceive.chunks){combined.set(c,off);off+=c.length;}
+  const iv=combined.slice(0,12), ct=combined.slice(12);
+  const key=await crypto.subtle.importKey('raw', fileReceive.fek, 'AES-GCM', false, ['decrypt']);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+  const blob=new Blob([plain]), url=URL.createObjectURL(blob);
+  const c=document.getElementById('messages'), d=document.createElement('div'); d.className='msg other';
+  let html=`<div class="bubble"><div class="file-bubble"><span>📎 ${escapeHtml(fileReceive.name)}</span>`;
+  if(blob.type.startsWith('image/'))html+=`<div class="file-preview"><img src="${url}"></div>`;
+  else if(blob.type.startsWith('video/'))html+=`<div class="file-preview"><video controls src="${url}"></video></div>`;
+  html+=`<a href="${url}" download="${escapeHtml(fileReceive.name)}" style="color:var(--accent);">다운로드</a></div><div class="time">${new Date().toLocaleTimeString()}</div></div>`;
+  d.innerHTML=html; c.appendChild(d); c.scrollTop=c.scrollHeight; fileReceive=null;
 }
 
-async function handleFiles(files) { for (const f of files) await sendFile(f); }
-async function sendFile(file) {
-  if (!dc || dc.readyState !== 'open' || !sessionKey) return;
-  const fileId = genUUID();
-  const fek = await crypto.subtle.generateKey({ name:'AES-GCM', length:256 }, true, ['encrypt']);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const fekRaw = await crypto.subtle.exportKey('raw', fek);
-  const fileBuf = await file.arrayBuffer();
-  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, fek, fileBuf);
-  const encData = new Uint8Array(iv.byteLength + ct.byteLength);
-  encData.set(iv); encData.set(new Uint8Array(ct), iv.byteLength);
-  const metaEnc = await encryptPayload({ type:'file_start', id: fileId, name: file.name, size: encData.byteLength, fek: buf2b64(fekRaw) });
-  dc.send(JSON.stringify({ type:'msg', ...metaEnc }));
-  const chunkSize = 64*1024;
-  let offset = 0;
-  while (offset < encData.byteLength) {
-    const end = Math.min(offset+chunkSize, encData.byteLength);
-    dc.send(encData.slice(offset, end).buffer);
-    offset = end;
-    await new Promise(r => setTimeout(r, 10));
+async function handleFiles(files){ for(const f of files)await sendFile(f); }
+async function sendFile(file){
+  if(!dc||dc.readyState!=='open'||!sessionKey)return;
+  const fileId=genUUID(), fek=await crypto.subtle.generateKey({name:'AES-GCM',length:256},true,['encrypt']);
+  const iv=crypto.getRandomValues(new Uint8Array(12)), fekRaw=await crypto.subtle.exportKey('raw',fek);
+  const fileBuf=await file.arrayBuffer();
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},fek,fileBuf);
+  const encData=new Uint8Array(iv.byteLength+ct.byteLength); encData.set(iv); encData.set(new Uint8Array(ct),iv.byteLength);
+  const metaEnc=await encryptPayload({type:'file_start',id:fileId,name:file.name,size:encData.byteLength,fek:buf2b64(fekRaw)});
+  dc.send(JSON.stringify({type:'msg',...metaEnc}));
+  const chunkSize=64*1024; let offset=0;
+  while(offset<encData.byteLength){
+    const end=Math.min(offset+chunkSize,encData.byteLength);
+    dc.send(encData.slice(offset,end).buffer); offset=end; await new Promise(r=>setTimeout(r,10));
   }
-  const endEnc = await encryptPayload({ type:'file_end', id: fileId });
-  dc.send(JSON.stringify({ type:'msg', ...endEnc }));
-  addMsg(`📤 ${file.name} 전송 완료`, 'me');
+  const endEnc=await encryptPayload({type:'file_end',id:fileId});
+  dc.send(JSON.stringify({type:'msg',...endEnc}));
+  addMsg(`📤 ${file.name} 전송 완료`,'me');
 }
 
-// ==================== UI 유틸리티 ====================
-function showChat() {
-  document.getElementById('simpleMode').style.display = 'none';
-  document.getElementById('chatScreen').style.display = 'flex';
+function showChat(){ document.getElementById('simpleMode').style.display='none'; document.getElementById('chatScreen').style.display='flex'; }
+function showSimple(){ document.getElementById('simpleMode').style.display='block'; document.getElementById('chatScreen').style.display='none'; }
+function closeConnection(){
+  if(pc){pc.close();pc=null;} dc=null; authKey=sessionKey=null; sendChain=recvChain=null;
+  salt=null; ourEcdhPair=null; peerEcdhPub=null; fileReceive=null; password=null;
+  document.getElementById('sessionFingerprint').textContent='';
+  document.getElementById('securityCard').style.display='none';
+  document.getElementById('passwordPrompt').style.display='block';
+  document.getElementById('passwordError').style.display='none';
 }
-function showSimple() {
-  document.getElementById('simpleMode').style.display = 'block';
-  document.getElementById('chatScreen').style.display = 'none';
+function formatBytes(b){return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';}
+function toggleSecurityDetail(){document.getElementById('securityDetail').classList.toggle('hidden');}
+function copyTextById(id){
+  const el=document.getElementById(id);
+  const t=el.tagName==='INPUT'||el.tagName==='TEXTAREA'?el.value:el.textContent;
+  navigator.clipboard.writeText(t).then(()=>alert('복사됨')).catch(()=>{});
 }
-function closeConnection() {
-  if (pc) { pc.close(); pc = null; }
-  dc = null; authKey = sessionKey = null; sendChain = recvChain = null;
-  salt = null; ourEcdhPair = null; peerEcdhPub = null; fileReceive = null;
-  password = null;
-  document.getElementById('sessionFingerprint').textContent = '';
-  document.getElementById('securityCard').style.display = 'none';
-  document.getElementById('passwordPrompt').style.display = 'block';
-  document.getElementById('passwordError').style.display = 'none';
-}
-function formatBytes(b) { return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB'; }
-function toggleSecurityDetail() { document.getElementById('securityDetail').classList.toggle('hidden'); }
-function copyTextById(id) {
-  const el = document.getElementById(id);
-  const t = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ? el.value : el.textContent;
-  navigator.clipboard.writeText(t).then(() => alert('복사됨')).catch(() => {});
-}
-function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);}
 </script>
 </body>
 </html>
