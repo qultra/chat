@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>P2P 메신저 - 완벽 작동</title>
+  <title>P2P 메신저 – 링크 한 번으로 연결</title>
   <style>
     :root {
       --bg: #0b0e14; --surface: #141a24; --card-bg: rgba(20,26,36,0.8);
-      --text: #e2e8f0; --sub: #94a3b8; --accent: #5b8def;
+      --text: #e2e8f0; --text-secondary: #94a3b8; --accent: #5b8def;
       --danger: #f87171; --success: #4ade80; --border: #1e293b;
       --radius: 16px; --radius-sm: 12px;
     }
@@ -19,25 +19,26 @@
       min-height: 100dvh; padding: 12px;
     }
     .app {
-      width: 100%; max-width: 560px; height: 95dvh;
+      width: 100%; max-width: 580px; height: 95dvh;
       background: var(--surface); border-radius: 28px;
       box-shadow: 0 30px 60px rgba(0,0,0,0.7);
       display: flex; flex-direction: column; overflow: hidden;
       border: 1px solid var(--border);
     }
-    .header {
+    .app-header {
       padding: 14px 20px; background: rgba(15,23,33,0.9);
       backdrop-filter: blur(24px); border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
     }
-    .header h1 { font-size: 1.2rem; font-weight: 700; background: linear-gradient(135deg,#8ab4f8,#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-    .status-dot { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; }
-    .dot.on { background: var(--success); }
-    .dot.off { background: var(--danger); }
+    .app-header h1 { font-size: 1.3rem; font-weight: 700; background: linear-gradient(135deg,#8ab4f8,#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .connection-status { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .status-dot.on { background: var(--success); }
+    .status-dot.off { background: var(--danger); }
 
-    .main { flex:1; overflow-y:auto; padding: 14px; display:flex; flex-direction:column; }
-    .main::-webkit-scrollbar { width:5px; } .main::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+    .main-view { flex:1; overflow-y:auto; padding: 14px; display:flex; flex-direction:column; }
+    .main-view::-webkit-scrollbar { width:5px; }
+    .main-view::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
 
     .card {
       background: var(--card-bg); backdrop-filter: blur(16px);
@@ -51,647 +52,408 @@
       font-weight: 600; font-size: 0.95rem; transition: all 0.2s; width: 100%;
       text-align: center; backdrop-filter: blur(12px);
     }
-    .btn:hover { background: rgba(255,255,255,0.1); }
+    .btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
     .btn.primary { background: var(--accent); border:none; }
-    .btn.small { padding: 8px 14px; width:auto; }
+    .btn.danger { background: rgba(248,113,113,0.15); color: var(--danger); border-color: var(--danger); }
     .btn-group { display: flex; gap: 8px; }
     .btn-group .btn { flex:1; }
 
-    input, textarea {
+    input, textarea, select {
       width: 100%; background: #0f131c; color: var(--text);
       border: 1px solid var(--border); border-radius: var(--radius-sm);
       padding: 12px 14px; font-size: 0.95rem; outline: none;
       font-family: inherit;
     }
-    input:focus, textarea:focus { border-color: var(--accent); }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
 
-    #chatScreen { display: none; flex-direction: column; flex:1; }
-    #messages {
+    .room-list { display: flex; flex-direction: column; gap: 8px; }
+    .room-item {
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 14px;
+      display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .room-item:hover { background: rgba(255,255,255,0.05); }
+    .room-info h4 { font-size: 0.95rem; }
+    .room-info p { font-size: 0.7rem; color: var(--text-secondary); }
+    .room-badge {
+      font-size: 0.65rem; padding: 2px 8px; border-radius: 10px;
+      background: rgba(91,141,239,0.2); color: #93c5fd;
+    }
+
+    .chat-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    .member-list { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+    .member-tag {
+      font-size: 0.7rem; background: rgba(255,255,255,0.06);
+      padding: 3px 10px; border-radius: 12px;
+    }
+    .messages {
       flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;
-      padding: 4px 0;
+      padding: 8px 0;
     }
     .msg { display: flex; }
-    .msg.me { justify-content: flex-end; }
+    .msg.mine { justify-content: flex-end; }
     .bubble {
       max-width: 80%; padding: 10px 16px; border-radius: 20px;
-      background: rgba(30,38,53,0.8); backdrop-filter: blur(8px);
+      background: rgba(30,38,53,0.8); backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,0.04);
       word-break: break-word;
     }
-    .msg.me .bubble { background: linear-gradient(135deg,rgba(59,130,246,0.4),rgba(139,92,246,0.4)); border-bottom-right-radius:6px; }
+    .msg.mine .bubble { background: linear-gradient(135deg,rgba(59,130,246,0.4),rgba(139,92,246,0.4)); border-bottom-right-radius:6px; }
     .msg.other .bubble { border-bottom-left-radius:6px; }
-    .time { font-size: 0.6rem; color: var(--sub); margin-top: 4px; text-align: right; }
+    .time { font-size: 0.6rem; color: var(--text-secondary); margin-top: 4px; text-align: right; }
     .input-bar { display: flex; gap: 8px; padding-top: 12px; }
     #msgInput { flex:1; }
+    .attach-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--accent); }
 
     .hidden { display: none !important; }
-    .text-sub { color: var(--sub); font-size: 0.8rem; }
+    .text-secondary { color: var(--text-secondary); font-size: 0.8rem; }
     .mt { margin-top: 10px; }
     .mb { margin-bottom: 8px; }
-    .link-box { word-break: break-all; background: #0f131c; padding: 10px; border-radius: 10px; font-size: 0.7rem; margin: 6px 0; }
     .spinner {
-      width: 20px; height: 20px; border: 3px solid var(--border);
+      width: 24px; height: 24px; border: 3px solid var(--border);
       border-top-color: var(--accent); border-radius: 50%;
-      animation: spin 0.8s linear infinite; display: inline-block;
+      animation: spin 0.8s linear infinite; margin: 20px auto;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 <div class="app">
-  <div class="header">
+  <div class="app-header">
     <h1>✦ P2P 메신저</h1>
-    <div class="status-dot">
-      <span id="connDot" class="dot off"></span>
-      <span id="connLabel">오프라인</span>
+    <div class="connection-status">
+      <span id="globalStatusDot" class="status-dot off"></span>
+      <span id="globalStatusLabel">오프라인</span>
     </div>
   </div>
 
-  <div class="main" id="mainView">
-    <!-- 기본 화면 -->
-    <div id="homeView" style="display:block;">
+  <div class="main-view" id="mainView">
+    <!-- 방 목록 -->
+    <div id="roomListView" style="display:block;">
       <div class="card">
-        <button class="btn primary" onclick="createNewRoom()">✨ 새 채팅</button>
-        <p class="text-sub mt" style="text-align:center;">또는 초대 링크/답장 링크를 클릭하세요</p>
-      </div>
-      <!-- 수동 답장 입력 (링크 전체 붙여넣기) -->
-      <div class="card">
-        <strong>📥 답장 링크 붙여넣기</strong>
-        <input type="text" id="manualAnswerLink" placeholder="상대에게 받은 답장 링크를 여기에 붙여넣으세요" class="mt">
-        <button class="btn mt" onclick="applyManualAnswer()">✅ 연결하기</button>
-      </div>
-    </div>
-
-    <!-- 방 생성 후 초대 링크 표시 -->
-    <div id="inviteView" style="display:none;">
-      <div class="card">
-        <button class="btn small" onclick="showHome()">← 뒤로</button>
-        <p class="text-sub mt">아래 링크를 상대에게 보내주세요</p>
-        <div class="link-box" id="inviteLinkDisplay"></div>
+        <button class="btn primary" onclick="showCreateRoom()">✨ 새 채팅</button>
         <div class="btn-group mt">
-          <button class="btn" onclick="copyInviteLink()">📋 복사</button>
+          <button class="btn" onclick="exportAllData()">📥 백업</button>
+          <button class="btn" onclick="document.getElementById('restoreFile').click()">📤 복원</button>
         </div>
-        <p class="text-sub mt">상대방이 답장 링크를 보내면 이 브라우저에서 열어주세요.</p>
+        <input type="file" id="restoreFile" accept=".json" class="hidden" onchange="importAllData(event)">
+      </div>
+      <div id="roomListContainer" class="room-list"></div>
+    </div>
+
+    <!-- 방 생성 (호스트) -->
+    <div id="createRoomView" style="display:none;">
+      <div class="card">
+        <button class="btn" onclick="showRoomList()" style="width:auto;">← 뒤로</button>
+        <input type="text" id="newRoomName" placeholder="방 이름" class="mt">
+        <select id="newRoomType" class="mt">
+          <option value="1:1">1:1 채팅</option>
+          <option value="group">그룹 채팅</option>
+          <option value="open">오픈 채널</option>
+        </select>
+        <button class="btn primary mt" onclick="createNewRoom()">방 만들기</button>
+      </div>
+      <div id="createdRoomInfo" style="display:none;" class="card">
+        <p class="text-secondary">아래 링크를 상대에게 보내면 자동으로 연결됩니다.</p>
+        <div id="inviteLink" style="background:#0f131c; padding:10px; border-radius:10px; word-break:break-all; font-size:0.75rem; margin:6px 0;"></div>
+        <button class="btn" onclick="copyInviteLink()">📋 링크 복사</button>
       </div>
     </div>
 
-    <!-- 게스트: 답장 링크 생성 화면 -->
-    <div id="answerView" style="display:none;">
-      <div class="card" style="text-align:center;">
-        <div class="spinner mb" id="answerSpinner"></div>
-        <p id="answerStatusText">연결 준비 중...</p>
-        <div id="answerLinkBox" style="display:none;" class="mt">
-          <p class="text-sub">아래 링크를 <strong>방장에게</strong> 보내주세요</p>
-          <div class="link-box" id="answerLinkDisplay"></div>
-          <div class="btn-group mt">
-            <button class="btn" onclick="copyAnswerLink()">📋 복사</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 연결 대기 화면 -->
-    <div id="waitView" style="display:none; text-align:center; margin-top:30px;">
-      <div class="spinner" style="width:24px;height:24px;margin:20px auto;"></div>
-      <p>상대방과 연결 중...</p>
-      <button class="btn mt small" onclick="cancelWait()">취소</button>
+    <!-- 자동 참가 시 로딩 화면 -->
+    <div id="autoJoinLoading" style="display:none; text-align:center; margin-top:30px;">
+      <div class="spinner"></div>
+      <p class="text-secondary">링크를 확인하고 있습니다...<br>잠시만 기다려주세요.</p>
     </div>
 
     <!-- 채팅 화면 -->
-    <div id="chatScreen">
-      <div id="messages"></div>
+    <div id="chatScreen" style="display:none; flex-direction:column; flex:1;">
+      <div class="chat-header">
+        <div>
+          <strong id="currentRoomName"></strong>
+          <span id="onlineBadge" class="text-secondary" style="margin-left:8px;"></span>
+        </div>
+        <div class="btn-group" style="width:auto;">
+          <button class="btn" onclick="inviteToCurrentRoom()" style="width:auto; padding:8px 14px;">➕ 초대</button>
+          <button class="btn danger" onclick="leaveCurrentRoom()" style="width:auto; padding:8px 14px;">나가기</button>
+        </div>
+      </div>
+      <div class="member-list" id="memberList"></div>
+      <div class="messages" id="messagesContainer"></div>
       <div class="input-bar">
+        <button class="attach-btn" onclick="document.getElementById('fileInput').click()">📎</button>
         <input type="text" id="msgInput" placeholder="메시지 입력..." autocomplete="off">
         <button class="btn primary" onclick="sendMessage()" style="width:auto; padding:10px 18px;">전송</button>
       </div>
+      <input type="file" id="fileInput" class="hidden" multiple onchange="handleFileSend(this.files)">
     </div>
   </div>
 </div>
 
 <script>
-// ==================== 전역 변수 ====================
-const OFFER_STORE_KEY = 'p2p_offer_'; // + roomId
-let activeRoomId = null, sharedKey = null;
+const ROOMS_KEY = 'p2p_rooms_final';
+const MSG_PREFIX = 'p2p_msg_';
+let rooms = [], activeRoomId = null, sharedKey = null;
 let myPeerId = 'peer-' + crypto.randomUUID().slice(0,8);
-let peerConn = null;   // RTCPeerConnection
-let dataChannel = null;
-let connectedPeers = 0;
-let isOfferer = false;
-let answerTimer = null;
+let peers = {}, connectedPeers = [], isOfferer = false;
 
-// URL-safe Base64
-function toBase64URL(str) {
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+loadRooms(); showRoomList();
+window.addEventListener('hashchange', handleHash);
+handleHash();
+
+function loadRooms() { rooms = JSON.parse(localStorage.getItem(ROOMS_KEY) || '[]'); }
+function saveRooms() { localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms)); }
+function loadMessages(rid) { return JSON.parse(localStorage.getItem(MSG_PREFIX+rid)||'[]'); }
+function saveMessages(rid, msgs) { localStorage.setItem(MSG_PREFIX+rid, JSON.stringify(msgs.slice(-500))); }
+
+function showView(id) {
+  ['roomListView','createRoomView','autoJoinLoading','chatScreen'].forEach(v => document.getElementById(v).style.display='none');
+  if(id==='chatScreen') document.getElementById('chatScreen').style.display='flex';
+  else if(id) document.getElementById(id).style.display='block';
 }
-function fromBase64URL(str) {
-  str = str.replace(/-/g, '+').replace(/_/g, '/');
-  while (str.length % 4) str += '=';
-  return atob(str);
-}
+function showRoomList() { showView('roomListView'); renderRoomList(); }
+function showCreateRoom() { showView('createRoomView'); }
+function showChat() { showView('chatScreen'); }
+function showLoading() { showView('autoJoinLoading'); }
 
-// ==================== 모든 ICE 서버 (400+) – 생략 없이 전부 포함 ====================
-const ALL_ICE_SERVERS = [
-  // Google STUN (5)
-  { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' }, { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun4.l.google.com:19302' },
-  // Twilio STUN (2)
-  { urls: 'stun:global.stun.twilio.com:3478' }, { urls: 'stun:stun.twilio.com:3478' },
-  // Mozilla
-  { urls: 'stun:stun.services.mozilla.com:3478' },
-  // Nextcloud
-  { urls: 'stun:stun.nextcloud.com:443' },
-  // Linphone
-  { urls: 'stun:stun.linphone.org:3478' },
-  // FreeSWITCH
-  { urls: 'stun:stun.freeswitch.org:3478' },
-  // Ekiga
-  { urls: 'stun:stun.ekiga.net:3478' },
-  // Viagenie (2)
-  { urls: 'stun:stun.viagenie.ca:3478' }, { urls: 'stun:stun.stunprotocol.org:3478' },
-  // Sipgate (5)
-  { urls: 'stun:stun.sipgate.net:3478' }, { urls: 'stun:stun.sipgate.de:3478' },
-  { urls: 'stun:stun.sipgate.co.uk:3478' }, { urls: 'stun:stun.sipgate.com:3478' },
-  { urls: 'stun:stun.sipgate.team:3478' },
-  // iptel.org (5)
-  { urls: 'stun:stun.iptel.org:3478' }, { urls: 'stun:stun.iptel.net:3478' },
-  { urls: 'stun:stun.iptel.com:3478' }, { urls: 'stun:stun.iptel.io:3478' },
-  { urls: 'stun:stun.iptel.ch:3478' },
-  // OpenRelay/Metered STUN
-  { urls: 'stun:openrelay.metered.ca:80' }, { urls: 'stun:openrelay.metered.ca:443' },
-  // Metered TURN (공용 계정) - TCP/UDP
-  { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:80?transport=udp', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443?transport=udp', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:5349?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-  // Numb (Viagenie TURN) - TCP/UDP
-  { urls: 'turn:numb.viagenie.ca?transport=tcp', username: 'numb@viagenie.ca', credential: 'numb' },
-  { urls: 'turn:numb.viagenie.ca?transport=udp', username: 'numb@viagenie.ca', credential: 'numb' },
-  // CounterPath
-  { urls: 'stun:stun.counterpath.com:3478' },
-  // VoIPbuster 계열 (26)
-  { urls: 'stun:stun.voipbuster.com:3478' }, { urls: 'stun:stun.voipstunt.com:3478' },
-  { urls: 'stun:stun.voipswitch.com:3478' }, { urls: 'stun:stun.voiparound.com:3478' },
-  { urls: 'stun:stun.voipcheap.com:3478' }, { urls: 'stun:stun.voipdiscount.com:3478' },
-  { urls: 'stun:stun.sipdiscount.com:3478' }, { urls: 'stun:stun.freecall.com:3478' },
-  { urls: 'stun:stun.jumblo.com:3478' }, { urls: 'stun:stun.messagenet.com:3478' },
-  { urls: 'stun:stun.internetcalls.com:3478' }, { urls: 'stun:stun.netappel.com:3478' },
-  { urls: 'stun:stun.poivy.com:3478' }, { urls: 'stun:stun.smsdiscount.com:3478' },
-  { urls: 'stun:stun.telphin.ru:3478' }, { urls: 'stun:stun.justvoip.com:3478' },
-  { urls: 'stun:stun.actionvoip.com:3478' }, { urls: 'stun:stun.easyvoip.com:3478' },
-  { urls: 'stun:stun.lowratevoip.com:3478' }, { urls: 'stun:stun.voipgain.com:3478' },
-  { urls: 'stun:stun.voipwise.com:3478' }, { urls: 'stun:stun.voipblast.com:3478' },
-  { urls: 'stun:stun.12connect.com:3478' }, { urls: 'stun:stun.12voip.com:3478' },
-  { urls: 'stun:stun.voipraider.com:3478' }, { urls: 'stun:stun.voipmove.com:3478' },
-  { urls: 'stun:stun.voipzen.com:3478' },
-  // Schlund
-  { urls: 'stun:stun.schlund.de:3478' },
-  // VoIPgate
-  { urls: 'stun:stun.voipgate.com:3478' },
-  // CallWithUs
-  { urls: 'stun:stun.callwithus.com:3478' },
-  // Netapp
-  { urls: 'stun:stun.netapp.com:3478' },
-  // Blink
-  { urls: 'stun:stun.blink.de:3478' },
-  // OVH
-  { urls: 'stun:stun.ovh.net:3478' },
-  // Evaphone
-  { urls: 'stun:stun.evaphone.com:3478' },
-  // InterVoip
-  { urls: 'stun:stun.intervoip.com:3478' },
-  // FreeVoipDeal
-  { urls: 'stun:stun.freevoipdeal.com:3478' },
-  // Voxox
-  { urls: 'stun:stun.voxox.com:3478' },
-  // Pbxes (2)
-  { urls: 'stun:stun.pbxes.com:3478' }, { urls: 'stun:stun.pbxes.de:3478' },
-  // Gradwell
-  { urls: 'stun:stun.gradwell.com:3478' },
-  // Ideasip
-  { urls: 'stun:stun.ideasip.com:3478' },
-  // Phonepower
-  { urls: 'stun:stun.phonepower.com:3478' },
-  // Skyways
-  { urls: 'stun:stun.skyways.com:3478' },
-  // 3CX
-  { urls: 'stun:stun.3cx.com:3478' },
-  // MyVoipProvider
-  { urls: 'stun:stun.myvoipprovider.com:3478' },
-  // T-Online
-  { urls: 'stun:stun.t-online.de:3478' },
-  // Sippeer
-  { urls: 'stun:stun.sippeer.com:3478' },
-  // Azteca
-  { urls: 'stun:stun.azteca.net:3478' },
-  // Zoiper
-  { urls: 'stun:stun.zoiper.com:3478' },
-  // OnSIP
-  { urls: 'stun:stun.onsip.com:3478' },
-  // VoIP.ms
-  { urls: 'stun:stun.voip.ms:3478' },
-  // Telnyx
-  { urls: 'stun:stun.telnyx.com:3478' },
-  // Flowroute
-  { urls: 'stun:stun.flowroute.com:3478' },
-  // Bandwidth
-  { urls: 'stun:stun.bandwidth.com:3478' },
-  // Vonage
-  { urls: 'stun:stun.vonage.com:3478' },
-  // 1und1, GMX, Web.de, Rockenstein, Lancom, AA.net.uk, MIT.de
-  { urls: 'stun:stun.1und1.de:3478' }, { urls: 'stun:stun.gmx.net:3478' },
-  { urls: 'stun:stun.web.de:3478' }, { urls: 'stun:stun.rockenstein.de:3478' },
-  { urls: 'stun:stun.lancom-systems.de:3478' }, { urls: 'stun:stun.aa.net.uk:3478' },
-  { urls: 'stun:stun.mit.de:3478' },
-  // 추가 VoIP/ISP STUN
-  { urls: 'stun:stun.voipcheap.co.uk:3478' }, { urls: 'stun:stun.sipgate.de:10000' },
-  { urls: 'stun:stun.sipgate.net:10000' }, { urls: 'stun:stun.freevoipdeal.com:3478' },
-  { urls: 'stun:stun.voipgain.com:3478' }, { urls: 'stun:stun.voipwise.com:3478' },
-  { urls: 'stun:stun.voipblast.com:3478' }, { urls: 'stun:stun.12connect.com:3478' },
-  { urls: 'stun:stun.12voip.com:3478' }, { urls: 'stun:stun.voipraider.com:3478' },
-  { urls: 'stun:stun.voipmove.com:3478' }, { urls: 'stun:stun.voipzen.com:3478' },
-  // 추가 TURN (TCP)
-  { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },
-  { urls: 'turn:turn.bistri.com:80?transport=tcp', username: 'bistri', credential: 'bistri' },
-  { urls: 'turn:turn.ideasip.com:3478?transport=tcp', username: 'ideasip', credential: 'ideasip' },
-  { urls: 'turn:turn.sipgate.net:3478?transport=tcp', username: 'sipgate', credential: 'sipgate' },
-  // 포트 5349 변형 (대량)
-  { urls: 'stun:stun.l.google.com:19305' }, { urls: 'stun:stun1.l.google.com:19305' },
-  { urls: 'stun:stun2.l.google.com:19305' }, { urls: 'stun:stun3.l.google.com:19305' },
-  { urls: 'stun:stun4.l.google.com:19305' }, { urls: 'stun:global.stun.twilio.com:5349' },
-  { urls: 'stun:stun.twilio.com:5349' }, { urls: 'stun:openrelay.metered.ca:5349' },
-  { urls: 'turn:openrelay.metered.ca:5349?transport=udp', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'stun:stun.iptel.org:5349' }, { urls: 'stun:stun.iptel.net:5349' },
-  { urls: 'stun:stun.iptel.com:5349' }, { urls: 'stun:stun.sipgate.net:5349' },
-  { urls: 'stun:stun.sipgate.de:5349' }, { urls: 'stun:stun.sipgate.co.uk:5349' },
-  { urls: 'stun:stun.voipbuster.com:5349' }, { urls: 'stun:stun.voipstunt.com:5349' },
-  { urls: 'stun:stun.voipswitch.com:5349' }, { urls: 'stun:stun.voiparound.com:5349' },
-  { urls: 'stun:stun.voipcheap.com:5349' }, { urls: 'stun:stun.voipdiscount.com:5349' },
-  { urls: 'stun:stun.sipdiscount.com:5349' }, { urls: 'stun:stun.freecall.com:5349' },
-  { urls: 'stun:stun.jumblo.com:5349' }, { urls: 'stun:stun.messagenet.com:5349' },
-  { urls: 'stun:stun.internetcalls.com:5349' }, { urls: 'stun:stun.netappel.com:5349' },
-  { urls: 'stun:stun.poivy.com:5349' }, { urls: 'stun:stun.smsdiscount.com:5349' },
-  { urls: 'stun:stun.telphin.ru:5349' }, { urls: 'stun:stun.justvoip.com:5349' },
-  { urls: 'stun:stun.actionvoip.com:5349' }, { urls: 'stun:stun.easyvoip.com:5349' },
-  { urls: 'stun:stun.lowratevoip.com:5349' }, { urls: 'stun:stun.voipgain.com:5349' },
-  { urls: 'stun:stun.voipwise.com:5349' }, { urls: 'stun:stun.voipblast.com:5349' },
-  { urls: 'stun:stun.12connect.com:5349' }, { urls: 'stun:stun.12voip.com:5349' },
-  { urls: 'stun:stun.voipraider.com:5349' }, { urls: 'stun:stun.voipmove.com:5349' },
-  { urls: 'stun:stun.voipzen.com:5349' }, { urls: 'stun:stun.viagenie.ca:5349' },
-  { urls: 'stun:stun.stunprotocol.org:5349' }, { urls: 'stun:stun.counterpath.com:5349' },
-  { urls: 'stun:stun.schlund.de:5349' }, { urls: 'stun:stun.voipgate.com:5349' },
-  { urls: 'stun:stun.callwithus.com:5349' }, { urls: 'stun:stun.netapp.com:5349' },
-  { urls: 'stun:stun.blink.de:5349' }, { urls: 'stun:stun.ovh.net:5349' },
-  { urls: 'stun:stun.evaphone.com:5349' }, { urls: 'stun:stun.intervoip.com:5349' },
-  { urls: 'stun:stun.freevoipdeal.com:5349' }, { urls: 'stun:stun.voxox.com:5349' },
-  { urls: 'stun:stun.pbxes.com:5349' }, { urls: 'stun:stun.pbxes.de:5349' },
-  { urls: 'stun:stun.gradwell.com:5349' }, { urls: 'stun:stun.ideasip.com:5349' },
-  { urls: 'stun:stun.phonepower.com:5349' }, { urls: 'stun:stun.skyways.com:5349' },
-  { urls: 'stun:stun.3cx.com:5349' }, { urls: 'stun:stun.myvoipprovider.com:5349' },
-  { urls: 'stun:stun.t-online.de:5349' }, { urls: 'stun:stun.sippeer.com:5349' },
-  { urls: 'stun:stun.azteca.net:5349' }, { urls: 'stun:stun.zoiper.com:5349' },
-  { urls: 'stun:stun.onsip.com:5349' }, { urls: 'stun:stun.voip.ms:5349' },
-  { urls: 'stun:stun.telnyx.com:5349' }, { urls: 'stun:stun.flowroute.com:5349' },
-  { urls: 'stun:stun.bandwidth.com:5349' }, { urls: 'stun:stun.vonage.com:5349' },
-  { urls: 'stun:stun.1und1.de:5349' }, { urls: 'stun:stun.gmx.net:5349' },
-  { urls: 'stun:stun.web.de:5349' }, { urls: 'stun:stun.rockenstein.de:5349' },
-  { urls: 'stun:stun.lancom-systems.de:5349' }, { urls: 'stun:stun.aa.net.uk:5349' },
-  { urls: 'stun:stun.mit.de:5349' },
-  { urls: 'turn:numb.viagenie.ca:80?transport=tcp', username: 'numb@viagenie.ca', credential: 'numb' },
-  { urls: 'turn:numb.viagenie.ca:443?transport=tcp', username: 'numb@viagenie.ca', credential: 'numb' },
-  { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:5349?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-];
-
-// ==================== 저장소 ====================
-function saveOffer(roomId, offer) {
-  localStorage.setItem(OFFER_STORE_KEY + roomId, JSON.stringify(offer));
-}
-function loadOffer(roomId) {
-  const stored = localStorage.getItem(OFFER_STORE_KEY + roomId);
-  return stored ? JSON.parse(stored) : null;
-}
-
-// ==================== 화면 전환 ====================
-function showView(viewId) {
-  document.getElementById('homeView').style.display = 'none';
-  document.getElementById('inviteView').style.display = 'none';
-  document.getElementById('answerView').style.display = 'none';
-  document.getElementById('waitView').style.display = 'none';
-  document.getElementById('chatScreen').style.display = 'none';
-  if (viewId === 'chat') document.getElementById('chatScreen').style.display = 'flex';
-  else if (viewId) document.getElementById(viewId).style.display = 'block';
-}
-function showHome() { showView('homeView'); }
-function showChat() { showView('chat'); }
-
-// ==================== 방 생성 (호스트) ====================
-async function createNewRoom() {
-  // 정리
-  closeConnection();
-  isOfferer = true;
-  activeRoomId = crypto.randomUUID();
-
-  try {
-    peerConn = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
-    const dc = peerConn.createDataChannel('chat');
-    setupDataChannel(dc);
-    const offer = await peerConn.createOffer();
-    await peerConn.setLocalDescription(offer);
-    // ICE 수집 기다리기 (최대 8초)
-    try {
-      await Promise.race([
-        waitIce(peerConn),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
-      ]);
-    } catch (e) { console.log('ICE timeout, continue'); }
-
-    // Offer 저장
-    saveOffer(activeRoomId, peerConn.localDescription);
-    // 초대 링크 생성
-    const link = location.origin + location.pathname + '#join=' + activeRoomId + '&offer=' + toBase64URL(JSON.stringify(peerConn.localDescription));
-    document.getElementById('inviteLinkDisplay').textContent = link;
-    showView('inviteView');
-
-    // 연결 감시
-    monitorConnection();
-  } catch (e) {
-    console.error(e);
-    alert('방 생성 실패: ' + e.message);
-    showHome();
+function renderRoomList() {
+  const c = document.getElementById('roomListContainer');
+  if(!rooms.length) {
+    c.innerHTML = '<p class="text-secondary" style="text-align:center;margin-top:30px;">아직 채팅방이 없습니다.<br>새 채팅을 시작하거나 초대 링크를 받으세요.</p>';
+    return;
   }
+  c.innerHTML = rooms.map(r => `
+    <div class="room-item" onclick="enterRoom('${r.id}')">
+      <div class="room-info"><h4>${escapeHtml(r.name)}</h4><p>${r.type==='1:1'?'1:1 채팅':r.type==='group'?'그룹 채팅':'오픈 채널'} · ${r.members.length}명</p></div>
+      <span class="room-badge">${r.type==='1:1'?'1:1':r.type==='group'?'그룹':'오픈'}</span>
+    </div>`).join('');
 }
 
+// ==================== 방 만들기 (호스트) ====================
+async function createNewRoom() {
+  const name = document.getElementById('newRoomName').value.trim()||'새 채팅방';
+  const type = document.getElementById('newRoomType').value;
+  closeAllPeers(); isOfferer = true;
+  activeRoomId = crypto.randomUUID();
+  const room = {id:activeRoomId,name,type,createdAt:Date.now(),members:[myPeerId]};
+  rooms.push(room); saveRooms();
+  await createLocalOffer();
+  const link = `${location.origin}${location.pathname}#join=${activeRoomId}&offer=${btoa(JSON.stringify(peers['local'].pc.localDescription))}`;
+  document.getElementById('inviteLink').textContent = link;
+  document.getElementById('createdRoomInfo').style.display='block';
+  enterRoom(activeRoomId);
+}
 function copyInviteLink() {
-  navigator.clipboard.writeText(document.getElementById('inviteLinkDisplay').textContent).then(() => alert('복사 완료!'));
+  navigator.clipboard.writeText(document.getElementById('inviteLink').textContent).then(()=>alert('복사 완료!'));
 }
 
-// ==================== 게스트: 자동 Answer 생성 ====================
+// ==================== 자동 참가 (리시버) ====================
 async function handleHash() {
   const hash = window.location.hash.substring(1);
-  if (!hash) return;
+  if(!hash) return;
   const params = new URLSearchParams(hash);
-  if (params.has('join') && params.has('offer')) {
-    // 게스트 모드
-    const offerBase64 = params.get('offer');
+  if(params.has('join') && params.has('offer')) {
+    const offer = JSON.parse(atob(params.get('offer')));
     const roomId = params.get('join');
+    showLoading(); // 로딩 화면 표시
     try {
-      const offer = JSON.parse(fromBase64URL(offerBase64));
-      // 화면 전환
-      showView('answerView');
-      document.getElementById('answerSpinner').style.display = 'inline-block';
-      document.getElementById('answerLinkBox').style.display = 'none';
-      document.getElementById('answerStatusText').textContent = '연결 준비 중...';
-
-      closeConnection();
-      isOfferer = false;
+      closeAllPeers(); isOfferer = false;
       activeRoomId = roomId;
-      peerConn = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
-      peerConn.ondatachannel = (e) => setupDataChannel(e.channel);
-      await peerConn.setRemoteDescription(offer);
-      const answer = await peerConn.createAnswer();
-      await peerConn.setLocalDescription(answer);
-      try {
-        await Promise.race([
-          waitIce(peerConn),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
-        ]);
-      } catch (e) {}
-
-      // Answer 링크 생성
-      const answerLink = location.origin + location.pathname + '#ans=' + roomId + '&answer=' + toBase64URL(JSON.stringify(peerConn.localDescription));
-      document.getElementById('answerLinkDisplay').textContent = answerLink;
-      document.getElementById('answerSpinner').style.display = 'none';
-      document.getElementById('answerLinkBox').style.display = 'block';
-      document.getElementById('answerStatusText').textContent = 'Answer 링크를 방장에게 보내주세요';
-
-      monitorConnection();
-    } catch (e) {
-      console.error(e);
-      alert('초대 링크가 잘못되었습니다.');
-      showHome();
-    }
-  } else if (params.has('ans') && params.has('answer')) {
-    // 호스트가 Answer 링크를 열었을 때
-    const answerBase64 = params.get('answer');
-    const roomId = params.get('ans');
-    try {
-      const answer = JSON.parse(fromBase64URL(answerBase64));
-      // Offer 불러오기
-      const storedOffer = loadOffer(roomId);
-      if (!storedOffer) {
-        alert('저장된 방 정보가 없습니다. 방을 먼저 만드세요.');
-        showHome();
-        return;
-      }
-      // 기존 연결 정리
-      closeConnection();
-      isOfferer = true;
-      activeRoomId = roomId;
-      peerConn = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
-      const dc = peerConn.createDataChannel('chat');
-      setupDataChannel(dc);
-      await peerConn.setLocalDescription(storedOffer);
-      await peerConn.setRemoteDescription(answer);
-      showView('waitView');
-      monitorConnection();
-    } catch (e) {
-      console.error(e);
-      alert('답장 링크가 올바르지 않습니다.');
-      showHome();
+      let room = rooms.find(r=>r.id===roomId);
+      if(!room) {
+        room = {id:roomId,name:'참가한 채팅방',type:'group',createdAt:Date.now(),members:[myPeerId]};
+        rooms.push(room); saveRooms();
+      } else if(!room.members.includes(myPeerId)) { room.members.push(myPeerId); saveRooms(); }
+      await connectToHost(offer);
+      // 연결 완료 후 자동으로 채팅 UI로
+      // (connectToHost 내부에서 핸드셰이크 후 채팅 진입)
+      history.replaceState(null,null,window.location.pathname);
+    } catch(e) {
+      alert('연결에 실패했습니다. 링크가 만료되었거나 네트워크 문제입니다.');
+      showRoomList();
     }
   }
 }
-window.addEventListener('hashchange', handleHash);
-window.addEventListener('load', () => {
-  handleHash();
-});
 
-// ==================== 수동 답장 입력 ====================
-function applyManualAnswer() {
-  const link = document.getElementById('manualAnswerLink').value.trim();
-  if (!link) return;
-  // URL 파싱
-  try {
-    const url = new URL(link);
-    const params = new URLSearchParams(url.hash.substring(1));
-    if (params.has('ans') && params.has('answer')) {
-      // 동일하게 처리
-      const answerBase64 = params.get('answer');
-      const roomId = params.get('ans');
-      const answer = JSON.parse(fromBase64URL(answerBase64));
-      const storedOffer = loadOffer(roomId);
-      if (!storedOffer) {
-        alert('저장된 방 정보가 없습니다. 먼저 방을 만드세요.');
-        return;
-      }
-      closeConnection();
-      isOfferer = true;
-      activeRoomId = roomId;
-      peerConn = new RTCPeerConnection({ iceServers: ALL_ICE_SERVERS });
-      const dc = peerConn.createDataChannel('chat');
-      setupDataChannel(dc);
-      peerConn.setLocalDescription(storedOffer).then(() => {
-        return peerConn.setRemoteDescription(answer);
-      }).then(() => {
-        showView('waitView');
-        monitorConnection();
-      }).catch(e => {
-        console.error(e);
-        alert('연결 실패');
-      });
-    } else {
-      alert('유효한 답장 링크가 아닙니다.');
-    }
-  } catch (e) {
-    alert('올바른 URL을 입력하세요.');
-  }
+// ==================== WebRTC + 자동 ECDH 핸드셰이크 ====================
+async function createLocalOffer() {
+  const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.services.mozilla.com:3478'}]});
+  const dc = pc.createDataChannel('chat');
+  peers['local'] = {pc,dc};
+  setupDataChannel(dc,'local');
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await waitIce(pc);
+  monitorPC(pc,'local');
+}
+async function connectToHost(offer) {
+  const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.services.mozilla.com:3478'}]});
+  const peerId = 'remote-'+Date.now();
+  peers[peerId] = {pc,dc:null};
+  pc.ondatachannel = e => setupDataChannel(e.channel,peerId);
+  await pc.setRemoteDescription(offer);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await waitIce(pc);
+  monitorPC(pc,peerId);
 }
 
-function cancelWait() {
-  showHome();
-}
-
-// ==================== WebRTC 이벤트 ====================
-function setupDataChannel(dc) {
-  dataChannel = dc;
+function setupDataChannel(dc,peerId) {
   dc.onopen = () => {
-    connectedPeers++;
-    updateStatus(true);
-    if (!sharedKey) startHandshake(dc);
-    showChat();
-    console.log('데이터 채널 열림');
+    if(peerId!=='local' && !connectedPeers.includes(peerId)) {
+      connectedPeers.push(peerId);
+      updateMemberListUI();
+      const room = rooms.find(r=>r.id===activeRoomId);
+      if(room && !room.members.includes(peerId)) { room.members.push(peerId); saveRooms(); }
+    }
+    updateOnlineStatus();
+    // 자동 핸드셰이크 시작
+    if(!sharedKey) startHandshake(dc);
   };
-  dc.onmessage = (e) => {
+  dc.onmessage = e => {
     const data = JSON.parse(e.data);
-    if (data.type === 'handshake') handleHandshake(data, dc);
-    else if (data.type === 'msg') decrypt(data).then(p => appendMessage(p, 'other')).catch(() => appendMessage('복호화 실패', 'system'));
+    if(data.type==='handshake') handleHandshake(data,dc);
+    else if(data.type==='msg') decrypt(data).then(p=>appendMessage(p,'other')).catch(()=>appendMessage('⚠️ 복호화 실패','system'));
   };
   dc.onclose = () => {
-    connectedPeers--;
-    updateStatus(connectedPeers > 0);
+    if(peerId!=='local') { connectedPeers = connectedPeers.filter(id=>id!==peerId); updateMemberListUI(); updateOnlineStatus(); }
   };
+  if(peers[peerId]) peers[peerId].dc = dc;
 }
 
-function monitorConnection() {
-  peerConn.oniceconnectionstatechange = () => {
-    console.log('ICE 상태:', peerConn.iceConnectionState);
-    if (peerConn.iceConnectionState === 'connected') {
-      if (document.getElementById('waitView').style.display !== 'none') {
-        showChat();
-      }
-    } else if (peerConn.iceConnectionState === 'disconnected' || peerConn.iceConnectionState === 'failed') {
-      updateStatus(false);
+function monitorPC(pc,peerId) {
+  pc.oniceconnectionstatechange = () => {
+    if(pc.iceConnectionState==='disconnected'||pc.iceConnectionState==='failed') {
+      if(peerId!=='local') { connectedPeers = connectedPeers.filter(id=>id!==peerId); updateMemberListUI(); updateOnlineStatus(); }
     }
   };
 }
 
-function updateStatus(connected) {
-  const dot = document.getElementById('connDot'), label = document.getElementById('connLabel');
-  dot.className = 'dot ' + (connected ? 'on' : 'off');
-  label.textContent = connected ? '연결됨' : '오프라인';
-}
-
-// ==================== 암호화 (ECDH + AES-256-GCM) ====================
+// ==================== ECDH 핸드셰이크 ====================
 async function startHandshake(dc) {
-  const eph = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-521' }, true, ['deriveBits']);
-  const pubJwk = await crypto.subtle.exportKey('jwk', eph.publicKey);
-  // 임시 키 저장
-  window._eph = { private: eph.privateKey };
-  dc.send(JSON.stringify({ type: 'handshake', pub: pubJwk }));
+  const eph = await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-521'},true,['deriveBits']);
+  peers['_eph'] = {private:eph.privateKey, public:eph.publicKey};
+  dc.send(JSON.stringify({type:'handshake', pub:await crypto.subtle.exportKey('jwk',eph.publicKey)}));
+}
+async function handleHandshake(data,dc) {
+  if(!data.pub) return;
+  try {
+    const remotePub = await crypto.subtle.importKey('jwk',data.pub,{name:'ECDH',namedCurve:'P-521'},false,[]);
+    if(!peers['_eph']) {
+      const eph = await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-521'},true,['deriveBits']);
+      peers['_eph'] = {private:eph.privateKey, public:eph.publicKey};
+      dc.send(JSON.stringify({type:'handshake', pub:await crypto.subtle.exportKey('jwk',eph.publicKey)}));
+    }
+    const shared = await crypto.subtle.deriveBits({name:'ECDH',public:remotePub},peers['_eph'].private,256);
+    sharedKey = await crypto.subtle.importKey('raw',shared,{name:'AES-GCM'},false,['encrypt','decrypt']);
+    delete peers['_eph'];
+    // 채팅 UI로 전환 (참가자인 경우)
+    if(!isOfferer) enterRoom(activeRoomId);
+  } catch(e) { console.error(e); }
 }
 
-async function handleHandshake(data, dc) {
-  if (!data.pub) return;
-  try {
-    const remotePub = await crypto.subtle.importKey('jwk', data.pub, { name: 'ECDH', namedCurve: 'P-521' }, false, []);
-    if (!window._eph) {
-      // 게스트가 먼저 받은 경우
-      const eph = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-521' }, true, ['deriveBits']);
-      window._eph = { private: eph.privateKey };
-      dc.send(JSON.stringify({ type: 'handshake', pub: await crypto.subtle.exportKey('jwk', eph.publicKey) }));
-    }
-    const shared = await crypto.subtle.deriveBits(
-      { name: 'ECDH', public: remotePub },
-      window._eph.private,
-      256
-    );
-    sharedKey = await crypto.subtle.importKey('raw', shared, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
-    delete window._eph;
-    // 검증
-    const test = 'ok-' + Date.now();
-    const enc = await encrypt(test);
-    const dec = await decrypt(enc);
-    if (dec === test) {
-      appendMessage('✅ AES-256-GCM 암호화 연결 확인', 'system');
-      console.log('암호화 검증 완료');
-    } else {
-      appendMessage('❌ 암호화 오류', 'system');
-    }
-  } catch (e) { console.error(e); }
+// ==================== 메시지 ====================
+async function sendMessage() {
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if(!text||!sharedKey) return;
+  const encrypted = await encrypt(text);
+  Object.values(peers).forEach(({dc})=>{ if(dc&&dc.readyState==='open') dc.send(JSON.stringify({type:'msg',...encrypted})); });
+  appendMessage(text,'mine');
+  saveLocalMessage(text,myPeerId);
+  input.value='';
+}
+function saveLocalMessage(text,sender) {
+  if(!activeRoomId) return;
+  const msgs = loadMessages(activeRoomId);
+  msgs.push({text,sender,time:Date.now()});
+  saveMessages(activeRoomId,msgs);
+}
+function appendMessage(text,type) {
+  const c = document.getElementById('messagesContainer');
+  const d = document.createElement('div'); d.className = `msg ${type}`;
+  d.innerHTML = `<div class="bubble">${escapeHtml(text)}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
 }
 
 async function encrypt(plaintext) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sharedKey, new TextEncoder().encode(plaintext));
-  return { iv: Array.from(iv), ct: Array.from(new Uint8Array(ct)) };
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM',iv},sharedKey,new TextEncoder().encode(plaintext));
+  return {iv:Array.from(iv),ct:Array.from(new Uint8Array(ct))};
 }
-
 async function decrypt(data) {
   const iv = new Uint8Array(data.iv), ct = new Uint8Array(data.ct);
-  const buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sharedKey, ct);
+  const buf = await crypto.subtle.decrypt({name:'AES-GCM',iv},sharedKey,ct);
   return new TextDecoder().decode(buf);
 }
 
-// ==================== 메시지 전송 ====================
-async function sendMessage() {
-  const input = document.getElementById('msgInput');
-  const text = input.value.trim();
-  if (!text || !sharedKey || !dataChannel || dataChannel.readyState !== 'open') return;
-  const encrypted = await encrypt(text);
-  dataChannel.send(JSON.stringify({ type: 'msg', ...encrypted }));
-  appendMessage(text, 'me');
-  input.value = '';
+// ==================== 방 입장 (UI) ====================
+function enterRoom(roomId) {
+  const room = rooms.find(r=>r.id===roomId);
+  if(!room) return;
+  activeRoomId = roomId;
+  document.getElementById('currentRoomName').textContent = room.name;
+  document.getElementById('messagesContainer').innerHTML = '';
+  loadMessages(roomId).forEach(msg => appendMessage(msg.text, msg.sender===myPeerId?'mine':'other'));
+  updateMemberListUI(); updateOnlineStatus(); showChat();
 }
 
-function appendMessage(text, sender) {
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'msg ' + (sender === 'me' ? 'me' : 'other');
-  div.innerHTML = `<div class="bubble">${escapeHtml(text)}<div class="time">${new Date().toLocaleTimeString()}</div></div>`;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+// ==================== 초대 / 나가기 ====================
+async function inviteToCurrentRoom() {
+  if(!activeRoomId||!isOfferer) return;
+  if(!peers['local']) await createLocalOffer();
+  const link = `${location.origin}${location.pathname}#join=${activeRoomId}&offer=${btoa(JSON.stringify(peers['local'].pc.localDescription))}`;
+  prompt('초대 링크 복사:',link);
+}
+function leaveCurrentRoom() { closeAllPeers(); activeRoomId=null; sharedKey=null; showRoomList(); }
+function closeAllPeers() { Object.values(peers).forEach(({pc})=>pc.close()); peers={}; connectedPeers=[]; }
+
+// ==================== UI 갱신 ====================
+function updateMemberListUI() {
+  const room = rooms.find(r=>r.id===activeRoomId);
+  if(!room) return;
+  document.getElementById('memberList').innerHTML = room.members.map(id=>{
+    const isMe = id===myPeerId, isOnline = id==='local'||connectedPeers.includes(id);
+    return `<span class="member-tag" style="opacity:${isOnline?1:0.5}">${isMe?'나':id.slice(0,6)} ${isOnline?'●':'○'}</span>`;
+  }).join('');
+}
+function updateOnlineStatus() {
+  const online = connectedPeers.length>0;
+  document.getElementById('globalStatusDot').className = 'status-dot '+(online?'on':'off');
+  document.getElementById('globalStatusLabel').textContent = online?`${connectedPeers.length}명 연결됨`:'오프라인';
+  document.getElementById('onlineBadge').textContent = online?`(${connectedPeers.length}명 접속)`:'(오프라인)';
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]);
+// ==================== 백업 ====================
+function exportAllData() {
+  const backup = rooms.map(r=>({...r,messages:loadMessages(r.id)}));
+  const blob = new Blob([JSON.stringify(backup)],{type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `p2p-backup-${new Date().toISOString().slice(0,10)}.json`; a.click();
 }
-
-function waitIce(pc) {
-  return new Promise(resolve => {
-    if (pc.iceGatheringState === 'complete') resolve();
-    else pc.addEventListener('icegatheringstatechange', () => {
-      if (pc.iceGatheringState === 'complete') resolve();
+async function importAllData(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const text = await file.text();
+  try {
+    const data = JSON.parse(text);
+    if(confirm('기존 데이터를 덮어쓰겠습니까? (취소: 병합)')) rooms = [];
+    data.forEach(room => {
+      const ex = rooms.find(r=>r.id===room.id);
+      if(ex) { Object.assign(ex,room); if(room.messages) saveMessages(room.id,room.messages); }
+      else { rooms.push(room); if(room.messages) saveMessages(room.id,room.messages); }
     });
-  });
+    saveRooms(); renderRoomList(); alert('복원 완료!');
+  } catch(e) { alert('올바른 백업 파일이 아닙니다.'); }
+  e.target.value='';
 }
 
-function closeConnection() {
-  if (peerConn) { peerConn.close(); peerConn = null; }
-  dataChannel = null;
-  sharedKey = null;
-  connectedPeers = 0;
-  updateStatus(false);
-}
-
-function copyAnswerLink() {
-  navigator.clipboard.writeText(document.getElementById('answerLinkDisplay').textContent).then(() => alert('복사 완료!'));
-}
-
-// 엔터 전송
-document.getElementById('msgInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+// ==================== 유틸 ====================
+function waitIce(pc) { return new Promise(r=>{ if(pc.iceGatheringState==='complete')r(); else pc.addEventListener('icegatheringstatechange',()=>pc.iceGatheringState==='complete'&&r()); }); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
 </script>
 </body>
 </html>
