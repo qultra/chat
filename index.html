@@ -295,7 +295,7 @@ function setupDC(){
   if(!dc)return;
   dc.onopen=()=>{
     updateConn(true); showChat();
-    startEcdhExchange();
+    startEcdhExchange(); // 공개키 교환 시작
   };
   dc.onmessage=onMsg;
   dc.onclose=()=>{updateConn(false);showSimple();};
@@ -369,7 +369,6 @@ async function submitPassword(){
 
 async function deriveAuthKey(){
   const km = await crypto.subtle.importKey('raw', str2buf(password), 'PBKDF2', false, ['deriveKey']);
-  // ★ extractable: true로 변경
   authKey = await crypto.subtle.deriveKey(
     { name:'PBKDF2', salt, iterations:PBKDF2_ITERS, hash:'SHA-512' },
     km, { name:'AES-GCM', length:256 }, true, ['encrypt','decrypt']
@@ -381,7 +380,6 @@ async function deriveSessionKey(){
   const authRaw = await crypto.subtle.exportKey('raw', authKey);
   const ikm = concatBufs(ecdhBits, str2buf(password));
   const hkdfKey = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveKey']);
-  // ★ extractable: true로 변경
   sessionKey = await crypto.subtle.deriveKey(
     { name:'HKDF', hash:'SHA-512', salt:authRaw, info:str2buf('session') },
     hkdfKey, { name:'AES-GCM', length:256 }, true, ['encrypt','decrypt']
@@ -447,12 +445,10 @@ async function sendText(){
   }
 }
 
-async function sendTyping(state){
-  if (!dc || dc.readyState !== 'open' || !sessionKey) return;
-  try {
-    const enc = await encryptPayload({ type:'typing', state });
-    dc.send(JSON.stringify({ type:'msg', ...enc }));
-  } catch (e) {}
+// ★ 타이핑 인디케이터를 평문으로 전송
+function sendTyping(state){
+  if (!dc || dc.readyState !== 'open') return;
+  dc.send(JSON.stringify({ type:'__typing__', state }));
 }
 
 function onMsg(e){
@@ -462,6 +458,11 @@ function onMsg(e){
   }
   try {
     const d = JSON.parse(e.data);
+    // 타이핑 인디케이터 평문 처리
+    if (d.type === '__typing__') {
+      document.getElementById('typingIndicator').style.display = d.state ? 'block' : 'none';
+      return;
+    }
     if (d.type === '__ecdhe__') {
       handleEcdheMessage(d);
       return;
@@ -475,8 +476,6 @@ function onMsg(e){
         if (inner.type === 'text') {
           addMsg(inner.content, 'other', inner.id);
           sendReadReceipt(inner.id);
-        } else if (inner.type === 'typing') {
-          document.getElementById('typingIndicator').style.display = inner.state ? 'block' : 'none';
         } else if (inner.type === 'read') {
           markAsRead(inner.id);
         } else if (inner.type === 'delete') {
